@@ -31,3 +31,7 @@ Feed normalizado: http://localhost:3000/api/trains/active
 A chamada foi observada pelo utilizador no Network do browser. O acesso automatizado externo pode estar sujeito a disponibilidade, CORS, proteção do serviço ou alterações do endpoint. A app não fabrica posições se as fontes falharem.
 
 Não utilizar para segurança da exploração ferroviária.
+
+
+## Branding V2.3.1
+Inclui o novo ícone/símbolo RJP Train Live fornecido em IconKitchen: favicon, PWA 192/512/maskable, Apple Touch Icon e recursos Android/iOS em `native-icons/`.

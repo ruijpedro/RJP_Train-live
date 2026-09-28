@@ -22,7 +22,7 @@ function App(){
  }
  useEffect(()=>{load();let i=setInterval(load,30000);return()=>clearInterval(i)},[]);
  let filtered=trains.filter(t=>JSON.stringify(t).toLowerCase().includes(q.toLowerCase()));
- return <main><header><div><h1>RJP TRAIN LIVE <em>V2</em></h1><small>Rede Ferroviária Nacional • Comboios • Estações • Atrasos</small></div><div className="live"><i className={status==="Online"?"on":""}/>{status}</div></header>
+ return <main><header><div><div className="brand"><img src="/icons/icon-192.png" className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2</em></h1></div><small>Rede Ferroviária Nacional • Comboios • Estações • Atrasos</small></div><div className="live"><i className={status==="Online"?"on":""}/>{status}</div></header>
  <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button onClick={load}>↻ Atualizar</button></nav>
  <section className="stats"><div><b>{trains.length}</b><small>comboios recebidos</small></div><div><b>{trains.filter(t=>+(t.delayMinutes??t.delay??0)>0).length}</b><small>com atraso</small></div><div><b>{updated?updated.toLocaleTimeString("pt-PT"):"—"}</b><small>última atualização</small></div></section>
  <div id="map"/>
