@@ -21,10 +21,12 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Build WebApp
+        env:
+          VITE_API_URL: ${{ vars.RJP_API_URL }}
         run: npm run build
       - uses: actions/upload-artifact@v4
         with:
-          name: RJP-Train-Live-Web-V2.3.2
+          name: RJP-Train-Live-Web-V2.4.1
           path: dist/
           if-no-files-found: error
 
@@ -32,31 +34,58 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
+
       - name: Install dependencies
         run: npm install
+
       - name: Build WebApp
+        env:
+          VITE_API_URL: ${{ vars.RJP_API_URL }}
         run: npm run build
+
       - name: Create Android project
         run: npx cap add android
-      - name: Apply RJP icon
-        run: |
-          rm -rf android/app/src/main/res/mipmap-*
-          cp -R native-icons/android/res/mipmap-* android/app/src/main/res/
+
       - name: Sync Capacitor
         run: npx cap sync android
+
+      - name: Apply RJP Train Live icon safely
+        shell: bash
+        run: |
+          set -e
+          SRC="native-icons/android/res"
+          DST="android/app/src/main/res"
+
+          # Keep Capacitor's resources and overlay IconKitchen resources.
+          if [ -d "$SRC" ]; then
+            cp -R "$SRC"/. "$DST"/
+          fi
+
+          # Use the guaranteed main launcher resource also for roundIcon.
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's#android:roundIcon="@mipmap/ic_launcher_round"#android:roundIcon="@mipmap/ic_launcher"#g' "$MANIFEST"
+
+          echo "Launcher references:"
+          grep -n "android:icon\\|android:roundIcon" "$MANIFEST" || true
+          echo "Launcher resources:"
+          find "$DST" -type f -name 'ic_launcher*' -print | sort || true
+
       - name: Build APK
         working-directory: android
         run: chmod +x gradlew && ./gradlew assembleDebug
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: RJP-Train-Live-V2.3.2-APK
+          name: RJP-Train-Live-V2.4.1-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
