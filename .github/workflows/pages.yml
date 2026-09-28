@@ -28,6 +28,8 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Build for GitHub Pages
+        env:
+          VITE_API_URL: ${{ vars.RJP_API_URL }}
         run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
