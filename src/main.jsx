@@ -2,8 +2,11 @@
 import React,{useEffect,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
 import L from"leaflet";import"./style.css";
+const DEFAULT_API="https://rjp-train-live-api.rjpedro.workers.dev/api";
 const BUILD_API=(import.meta.env.VITE_API_URL||"").replace(/\/$/,"");
-const LOCAL_API=(localStorage.getItem("rjp_api")||BUILD_API||"").replace(/\/$/,"");
+// Prefer the deployed/build API. Old localhost values saved in the browser must never override production.
+const SAVED_API=(localStorage.getItem("rjp_api")||"").replace(/\/$/,"");
+const LOCAL_API=(BUILD_API||DEFAULT_API||SAVED_API).replace(/\/$/,"");
 const RUI_FEED="https://comboios.ruicosta.pt/api/cache/trains/active";
 const BASE=import.meta.env.BASE_URL;
 function directTrain(x){
@@ -37,7 +40,11 @@ function App(){
    let j,a,primary;
    if(LOCAL_API){
      let r=await fetch(`${LOCAL_API}/trains/active`);if(!r.ok)throw Error(r.status);j=await r.json();
-     a=Array.isArray(j)?j:(j.data||j.trains||[]);primary=j.primary||"Backend RJP";
+     const raw=Array.isArray(j)?j:(j.data||j.trains||[]);
+     // The Cloudflare Worker returns the original Comboios Live schema.
+     // Normalize it here so the map always receives top-level coordinates.
+     a=raw.map(x=>(x?.data?.status||x?.fixed||x?.db)?directTrain(x):x);
+     primary=j?.primary||"RJP API · Comboios Live";
    }else{
      let r=await fetch(RUI_FEED,{headers:{accept:"application/json"}});if(!r.ok)throw Error(r.status);j=await r.json();
      a=(Array.isArray(j)?j:(j.data||j.trains||[])).map(directTrain);primary="Comboios Live";
@@ -54,7 +61,7 @@ function App(){
  }
  useEffect(()=>{load();let i=setInterval(load,30000);return()=>clearInterval(i)},[]);
  let filtered=trains.filter(t=>JSON.stringify(t).toLowerCase().includes(q.toLowerCase()));
- return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2</em></h1></div><small>Rede Ferroviária Nacional • Comboios • Estações • Atrasos</small></div><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div></header>
+ return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2.4.2</em></h1></div><small>Rede Ferroviária Nacional • Comboios • Estações • Atrasos</small></div><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div></header>
  <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button onClick={load}>↻ Atualizar</button></nav>
  <section className="stats"><div><b>{trains.length}</b><small>comboios recebidos</small></div><div><b>{trains.filter(t=>+(t.delayMinutes??t.delay??0)>0).length}</b><small>com atraso</small></div><div><b>{updated?updated.toLocaleTimeString("pt-PT"):"—"}</b><small>última atualização</small></div></section>
  <div id="map"/>
