@@ -1,0 +1,3 @@
+name = "rjp-train-live-api"
+main = "worker.js"
+compatibility_date = "2026-09-28"

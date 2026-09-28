@@ -42,3 +42,20 @@ Inclui o novo ícone/símbolo RJP Train Live fornecido em IconKitchen: favicon, 
 - GitHub Actions passa a gerar Web artifact e APK Android debug.
 - Capacitor Android incluído.
 - Em publicação estática, a app tenta o feed Comboios Live diretamente; com `rjp_api` configurado usa o backend RJP.
+
+## V2.3.3 — Android icon build fix
+Corrigido o workflow Android: deixa de apagar `mipmap-*`, preserva a estrutura criada pelo Capacitor,
+sobrepõe os recursos IconKitchen compatíveis e garante `ic_launcher` e `ic_launcher_round` antes do Gradle.
+
+## V2.4.0 — Proxy live + novo IconKitchen
+- Novo pacote IconKitchen (7) aplicado a Web/PWA, Android e iOS.
+- A WebApp e o APK aceitam `VITE_API_URL` via variável GitHub Actions `RJP_API_URL`.
+- Incluído `worker/` com proxy Cloudflare para evitar bloqueio CORS do browser.
+- Workflow manual `Deploy RJP Live Proxy`.
+- Diagnóstico da fonte mostra CORS/rede ou erro HTTP em vez de mensagem genérica.
+
+### Ligação do proxy
+Depois de publicar o Worker, criar no repositório GitHub:
+Settings > Secrets and variables > Actions > Variables > `RJP_API_URL`
+com o URL do Worker, sem `/api`, por exemplo `https://rjp-train-live-api....workers.dev/api`.
+A app acrescenta `/trains/active`.

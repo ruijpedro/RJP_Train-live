@@ -2,7 +2,8 @@
 import React,{useEffect,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
 import L from"leaflet";import"./style.css";
-const LOCAL_API=localStorage.getItem("rjp_api")||"";
+const BUILD_API=(import.meta.env.VITE_API_URL||"").replace(/\/$/,"");
+const LOCAL_API=(localStorage.getItem("rjp_api")||BUILD_API||"").replace(/\/$/,"");
 const RUI_FEED="https://comboios.ruicosta.pt/api/cache/trains/active";
 const BASE=import.meta.env.BASE_URL;
 function directTrain(x){
@@ -45,11 +46,15 @@ function App(){
    let g=layers.current.tr;g.clearLayers();a.forEach(t=>{let lat=+(t.latitude??t.lat),lon=+(t.longitude??t.lng??t.lon);if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
     let d=+(t.delayMinutes??t.delay??0),mk=L.marker([lat,lon]).addTo(g);mk.bindTooltip(`🚆 ${n(t.trainNumber??t.number??t.id)} ${d>0?`+${d} min`:""}`);mk.on("click",()=>setSel(t));
    })
-  }catch(e){setStatus("Fonte dinâmica indisponível")}
+   }catch(e){
+   console.error("RJP Train Live feed error:",e);
+   const msg=e instanceof TypeError?"CORS/rede":(e?.message||"erro");
+   setStatus(`Fonte indisponível · ${msg}`)
+  }
  }
  useEffect(()=>{load();let i=setInterval(load,30000);return()=>clearInterval(i)},[]);
  let filtered=trains.filter(t=>JSON.stringify(t).toLowerCase().includes(q.toLowerCase()));
- return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2</em></h1></div><small>Rede Ferroviária Nacional • Comboios • Estações • Atrasos</small></div><div className="live"><i className={status==="Online"?"on":""}/>{status}</div></header>
+ return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2</em></h1></div><small>Rede Ferroviária Nacional • Comboios • Estações • Atrasos</small></div><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div></header>
  <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button onClick={load}>↻ Atualizar</button></nav>
  <section className="stats"><div><b>{trains.length}</b><small>comboios recebidos</small></div><div><b>{trains.filter(t=>+(t.delayMinutes??t.delay??0)>0).length}</b><small>com atraso</small></div><div><b>{updated?updated.toLocaleTimeString("pt-PT"):"—"}</b><small>última atualização</small></div></section>
  <div id="map"/>
