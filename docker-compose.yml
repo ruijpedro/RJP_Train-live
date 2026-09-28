@@ -1,0 +1,19 @@
+
+services:
+  comboios:
+    image: ghcr.io/caiocdcs/comboios-server:latest
+    ports: ["3001:3000"]
+    restart: unless-stopped
+  rjp-api:
+    image: node:22-alpine
+    working_dir: /app
+    volumes: ["./:/app"]
+    command: sh -c "npm install && node server/index.js"
+    environment:
+      PORT: 3000
+      RUI_COSTA_API: https://comboios.ruicosta.pt/api/cache/trains/active
+      CP_MAP_URL: https://cptrainmap.duckdns.org/api/trains/active
+      COMBOIOS_API: http://comboios:3000
+    ports: ["3000:3000"]
+    depends_on: [comboios]
+    restart: unless-stopped
