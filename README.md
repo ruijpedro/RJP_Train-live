@@ -35,3 +35,10 @@ Não utilizar para segurança da exploração ferroviária.
 
 ## Branding V2.3.1
 Inclui o novo ícone/símbolo RJP Train Live fornecido em IconKitchen: favicon, PWA 192/512/maskable, Apple Touch Icon e recursos Android/iOS em `native-icons/`.
+
+## V2.3.2
+- Corrigido GitHub Pages em subdiretório com Vite `base: './'`.
+- Caminhos de ícones e GeoJSON compatíveis com Pages/Capacitor.
+- GitHub Actions passa a gerar Web artifact e APK Android debug.
+- Capacitor Android incluído.
+- Em publicação estática, a app tenta o feed Comboios Live diretamente; com `rjp_api` configurado usa o backend RJP.

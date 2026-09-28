@@ -1,12 +1,15 @@
 {
   "name": "rjp-train-live",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "server": "node server/index.js"
+    "server": "node server/index.js",
+    "android:add": "npx cap add android",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:open": "npx cap open android"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
@@ -15,6 +18,11 @@
     "react-dom": "latest",
     "leaflet": "latest",
     "express": "latest",
-    "cors": "latest"
+    "cors": "latest",
+    "@capacitor/core": "latest"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "latest",
+    "@capacitor/android": "latest"
   }
 }

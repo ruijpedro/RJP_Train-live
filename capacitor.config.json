@@ -1,0 +1,8 @@
+{
+  "appId": "pt.rjp.trainlive",
+  "appName": "RJP Train Live",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
