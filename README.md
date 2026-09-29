@@ -59,3 +59,11 @@ Depois de publicar o Worker, criar no repositório GitHub:
 Settings > Secrets and variables > Actions > Variables > `RJP_API_URL`
 com o URL do Worker, sem `/api`, por exemplo `https://rjp-train-live-api....workers.dev/api`.
 A app acrescenta `/trains/active`.
+
+
+## V2.5 — Railway Map
+- Rede ferroviária visível logo ao abrir o mapa (overlay OpenRailwayMap + GeoJSON RFN quando disponível).
+- Fonte explicitamente identificada na interface: WebApp Comboios Live — Rui Costa.
+- Botão Atualizar materializado, com estado de carregamento.
+- Atualização automática mantida.
+- RJP API / Cloudflare Worker como intermediário do feed.
