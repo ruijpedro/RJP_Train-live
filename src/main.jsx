@@ -2,6 +2,7 @@
 import React,{useEffect,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
 import L from"leaflet";import"./style.css";
+import{getSavedAlerts,dispatchAlerts,ALERTS_KEY}from"./alerts.js";
 const DEFAULT_API="https://rjp-train-live-api.rjpedro.workers.dev/api";
 const BUILD_API=(import.meta.env.VITE_API_URL||"").replace(/\/$/,"");
 // Prefer the deployed/build API. Old localhost values saved in the browser must never override production.
@@ -14,7 +15,7 @@ function directTrain(x){
  const lat=Number(live.latitude??fixed.latitude),lon=Number(live.longitude??fixed.longitude);
  const stops=Array.isArray(fixed.trainStops)?fixed.trainStops:[];
  const num=live.trainNumber??fixed.trainNumber??db.trainNumber??x.train_id;
- const delaySec=Number(live.delay);
+ const delaySec=live.delay==null?NaN:Number(live.delay);
  const delayMinutes=Number.isFinite(delaySec)?Math.round(delaySec/60):(Number(fixed.delay)||0);
  const lastCode=live.lastStation??fixed.lastStationCode;
  const ix=stops.findIndex(s=>s?.station?.code===lastCode), next=ix>=0?stops[ix+1]:null;
@@ -26,8 +27,17 @@ function directTrain(x){
  trainStops:stops,source:"Comboios Live / Rui Costa"}}
 
 const n=v=>v??"—";
+function sendAlert(c){
+ const action=c.type==='arrival'?'chegada':'partida';
+ const title=`🚆 Comboio ${c.train} · ${action}`;
+ const body=`${c.station}: ${c.time} (previsto)${c.delay>0?` · atraso +${c.delay} min`:''}. Fonte: Comboios Live — Rui Costa.`;
+ if('Notification'in window&&Notification.permission==='granted'){
+  try{new Notification(title,{body,icon:`${BASE}icons/icon-192.png`,tag:c.key})}catch(e){console.warn(e)}
+ }
+}
+
 function App(){
- const mapRef=useRef(),layers=useRef({}); const[trains,setTrains]=useState([]),[sel,setSel]=useState(),[q,setQ]=useState(""),[status,setStatus]=useState("A ligar…"),[updated,setUpdated]=useState(),[loading,setLoading]=useState(false);
+ const mapRef=useRef(),layers=useRef({}); const [alerts,setAlerts]=useState(getSavedAlerts),[alertOpen,setAlertOpen]=useState(false),[alertScope,setAlertScope]=useState("station"),[alertTarget,setAlertTarget]=useState(""),[alertEvent,setAlertEvent]=useState("both"),[alertLead,setAlertLead]=useState(10),[alertMsg,setAlertMsg]=useState(""); const[trains,setTrains]=useState([]),[sel,setSel]=useState(),[q,setQ]=useState(""),[status,setStatus]=useState("A ligar…"),[updated,setUpdated]=useState(),[loading,setLoading]=useState(false);
  useEffect(()=>{let m=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);mapRef.current=m;
  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",opacity:.72}).addTo(m);
  // Railway-first overlay: visible immediately when the app opens.
@@ -54,7 +64,7 @@ function App(){
      let r=await fetch(RUI_FEED,{headers:{accept:"application/json"}});if(!r.ok)throw Error(r.status);j=await r.json();
      a=(Array.isArray(j)?j:(j.data||j.trains||[])).map(directTrain);primary="Comboios Live";
    }
-   setTrains(a);setUpdated(new Date());setStatus(`Online · ${primary}`);
+   setTrains(a);dispatchAlerts(a,getSavedAlerts(),new Date(),sendAlert);setUpdated(new Date());setStatus(`Online · ${primary}`);
    let g=layers.current.tr;g.clearLayers();a.forEach(t=>{let lat=+(t.latitude??t.lat),lon=+(t.longitude??t.lng??t.lon);if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
     let d=+(t.delayMinutes??t.delay??0),mk=L.marker([lat,lon]).addTo(g);mk.bindTooltip(`🚆 ${n(t.trainNumber??t.number??t.id)} ${d>0?`+${d} min`:""}`);mk.on("click",()=>setSel(t));
    })
@@ -65,10 +75,31 @@ function App(){
   } finally { setLoading(false); }
  }
  useEffect(()=>{load();let i=setInterval(load,30000);return()=>clearInterval(i)},[]);
+ function addAlert(){
+  const target=alertTarget.trim();if(!target){setAlertMsg('Indica a estação ou o número do comboio.');return}
+  const rule={id:Date.now().toString(36),scope:alertScope,target,event:alertEvent,lead:Number(alertLead),enabled:true};
+  const next=[...alerts,rule];setAlerts(next);localStorage.setItem(ALERTS_KEY,JSON.stringify(next));setAlertMsg('Alerta guardado neste dispositivo.');setAlertTarget('');
+ }
+ function removeAlert(id){const next=alerts.filter(a=>a.id!==id);setAlerts(next);localStorage.setItem(ALERTS_KEY,JSON.stringify(next))}
+ async function enableNotifications(){
+  if(!('Notification'in window)){setAlertMsg('Este navegador não suporta notificações Web.');return}
+  try{const p=await Notification.requestPermission();setAlertMsg(p==='granted'?'Notificações autorizadas.':'Permissão não concedida.')}catch{setAlertMsg('Não foi possível pedir a permissão.')}
+ }
  let filtered=trains.filter(t=>JSON.stringify(t).toLowerCase().includes(q.toLowerCase()));
- return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2.5.1</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>Fonte dos dados: <b>WebApp Comboios Live — Rui Costa</b></small></div></header>
- <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button className={loading?"refresh loading":"refresh"} onClick={load} disabled={loading}><span>↻</span>{loading?" A atualizar…":" Atualizar agora"}</button></nav>
+ return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2.6</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>Fonte dos dados: <b>WebApp Comboios Live — Rui Costa</b></small></div></header>
+ <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button className={loading?"refresh loading":"refresh"} onClick={load} disabled={loading}><span>↻</span>{loading?" A atualizar…":" Atualizar agora"}</button><button className="alertsButton" onClick={()=>setAlertOpen(v=>!v)}>🔔 Alertas ({alerts.length})</button></nav>
  <section className="stats"><div><b>{trains.length}</b><small>comboios recebidos</small></div><div><b>{trains.filter(t=>+(t.delayMinutes??t.delay??0)>0).length}</b><small>com atraso</small></div><div><b>{updated?updated.toLocaleTimeString("pt-PT"):"—"}</b><small>última atualização</small></div></section>
+ {alertOpen&&<section className="alertsPanel"><div className="alertsHeading"><h2>🔔 Alertas ferroviários</h2><button onClick={()=>setAlertOpen(false)} aria-label="Fechar alertas">×</button></div>
+ <p>Alertas de horários previstos, baseados na WebApp Comboios Live — Rui Costa. Funcionam enquanto a aplicação está aberta e ligada à Internet; não são notificações push com a app fechada.</p>
+ <div className="alertsForm"><label>Monitorizar<select value={alertScope} onChange={e=>setAlertScope(e.target.value)}><option value="station">Estação</option><option value="train">Comboio</option></select></label>
+ <label>{alertScope==='station'?'Nome exato da estação':'Número do comboio'}<input value={alertTarget} onChange={e=>setAlertTarget(e.target.value)} placeholder={alertScope==='station'?'Ex.: Leiria':'Ex.: 129'} list={alertScope==='station'?'stationsList':undefined}/></label>
+ <datalist id="stationsList">{[...new Set(trains.flatMap(t=>(t.trainStops||[]).map(s=>s?.station?.designation).filter(Boolean)))].sort().map(st=><option key={st} value={st}/>)}</datalist>
+ <label>Evento<select value={alertEvent} onChange={e=>setAlertEvent(e.target.value)}><option value="both">Chegada e partida</option><option value="arrival">Chegada</option><option value="departure">Partida</option></select></label>
+ <label>Antecedência<select value={alertLead} onChange={e=>setAlertLead(+e.target.value)}><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option></select></label>
+ <button onClick={addAlert}>+ Guardar alerta</button><button onClick={enableNotifications} className="secondary">Autorizar notificações</button></div>
+ {alertMsg&&<p role="status">{alertMsg}</p>}
+ <div className="alertRules">{alerts.length===0?<p>Sem alertas configurados.</p>:alerts.map(a=><div className="alertRule" key={a.id}><span><b>{a.scope==='station'?'Estação':'Comboio'}: {a.target}</b><small>{a.event==='both'?'Chegada e partida':a.event==='arrival'?'Chegada':'Partida'} · {a.lead} min antes</small></span><button onClick={()=>removeAlert(a.id)} aria-label={`Remover alerta ${a.target}`}>Remover</button></div>)}</div>
+ </section>}
  <div id="map"/>
  <aside><h3>Comboios</h3>{filtered.slice(0,100).map((t,i)=>{let d=+(t.delayMinutes??t.delay??0);return <article key={i} onClick={()=>setSel(t)}><b>🚆 {n(t.trainNumber??t.number??t.id)}</b><span className={d>0?"late":"ok"}>{d>0?`+${d} min`:"A horas"}</span><small>{n(t.origin?.designation??t.origin)} → {n(t.destination?.designation??t.destination)}</small></article>})}</aside>
  {sel&&<div className="card"><button onClick={()=>setSel()}>×</button><h2>🚆 {n(sel.trainNumber??sel.number??sel.id)}</h2><p><b>{n(sel.origin?.designation??sel.origin)}</b> → <b>{n(sel.destination?.designation??sel.destination)}</b></p><p>Atraso: <strong className={+(sel.delayMinutes??sel.delay??0)>0?"late":"ok"}>{+(sel.delayMinutes??sel.delay??0)>0?`+${sel.delayMinutes??sel.delay} min`:"A horas"}</strong></p><p>Serviço: <b>{n(sel.service??sel.serviceCode)}</b></p><p>Estado: {n(sel.status)} · Última: {n(sel.lastStation)}</p><p>Próxima: {n(sel.nextStop?.designation??sel.nextStop)}</p><p>Fonte dos dados: <b>WebApp Comboios Live — Rui Costa</b></p><p className="via">Ligação: RJP API / Cloudflare Worker</p><small>Posição e estado dependem da fonte dinâmica disponível. Informação não destinada a segurança da exploração.</small></div>}

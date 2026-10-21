@@ -67,3 +67,13 @@ A app acrescenta `/trains/active`.
 - Botão Atualizar materializado, com estado de carregamento.
 - Atualização automática mantida.
 - RJP API / Cloudflare Worker como intermediário do feed.
+
+## V2.6 — Alertas ferroviários
+
+Botão **🔔 Alertas**: guardar regras por estação (nome igual ao recebido no feed) ou número de comboio; chegada/partida; antecedência 5/10/15 minutos. As regras ficam no armazenamento local do dispositivo e a verificação ocorre a cada atualização do feed (30 segundos). Ao atingir a janela de antecedência, é enviada uma notificação Web se a permissão tiver sido concedida e a aplicação estiver aberta. O sistema evita repetir o mesmo aviso no mesmo dia. Usa ETA/ETD do feed quando disponíveis, senão o horário publicado.
+
+**Limite importante:** esta versão não inclui infraestrutura de Web Push, Firebase ou execução em segundo plano. Em Android/Chrome, as notificações podem não surgir quando a app está fechada ou suspensa. Para push real com app fechada, será necessário um serviço agendado no Worker, subscrições Web Push e chaves VAPID (ou FCM para Android), além de consentimento do utilizador. O feed disponibiliza previsões, não confirma por si só a chegada ou partida efetiva.
+
+Fonte de dados de circulação atribuída explicitamente à **WebApp Comboios Live — Rui Costa**, por intermédio da RJP API / Cloudflare Worker.
+
+Testes: `node --test tests/*.test.mjs`.
