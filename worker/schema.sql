@@ -1,9 +1,5 @@
-CREATE TABLE IF NOT EXISTS devices (
- id TEXT PRIMARY KEY, secret TEXT NOT NULL, token TEXT NOT NULL,
- rules TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS deliveries (
- device_id TEXT NOT NULL, alert_key TEXT NOT NULL, created_at INTEGER NOT NULL,
- PRIMARY KEY(device_id,alert_key)
-);
-CREATE INDEX IF NOT EXISTS idx_deliveries_created ON deliveries(created_at);
+-- Executar UMA VEZ na consola D1 existente, após as 3 tabelas já criadas.
+ALTER TABLE push_subscriptions ADD COLUMN device_secret TEXT;
+ALTER TABLE push_subscriptions ADD COLUMN rules TEXT NOT NULL DEFAULT '[]';
+-- A tabela train_alerts fica disponível para evolução dos alertas por estação/comboio.
+-- O Worker V2.7.1 mantém regras JSON por dispositivo para compatibilidade com a APK V2.7.

@@ -55,7 +55,7 @@ async function check(env){
  if(!env.DB||!(env.FIREBASE_SERVICE_ACCOUNT||env.FIREBASE_SERVICE_ACCOUNT_JSON))return;
  const res=await fetch(FEED,{headers:{Accept:'application/json'}});if(!res.ok)throw Error('Fonte '+res.status);
  const trains=await res.json();if(!Array.isArray(trains))throw Error('Formato da fonte inválido');
- const devices=await env.DB.prepare('SELECT id, token, rules FROM devices').all();
+ const devices=await env.DB.prepare('SELECT device_id AS id, fcm_token AS token, rules FROM push_subscriptions WHERE enabled=1').all();
  let auth=null,sent=0;const now=new Date();
  for(const d of devices.results){
   let rules;try{rules=JSON.parse(d.rules)}catch{continue}
@@ -63,23 +63,23 @@ async function check(env){
    if(!rule.enabled)continue;
    for(const raw of trains){
     for(const c of matches(raw,rule,now)){
-     const prior=await env.DB.prepare('SELECT 1 FROM deliveries WHERE device_id=? AND alert_key=?').bind(d.id,c.key).first();if(prior)continue;
+     const prior=await env.DB.prepare('SELECT 1 FROM notification_history WHERE device_id=? AND event_key=?').bind(d.id,c.key).first();if(prior)continue;
      if(!auth)auth=await firebaseToken(env);
      const r=await sendFCM(auth,d.token,c);
-     if(r.ok){await env.DB.prepare('INSERT OR IGNORE INTO deliveries(device_id,alert_key,created_at) VALUES(?,?,?)').bind(d.id,c.key,Date.now()).run();sent++}
+     if(r.ok){await env.DB.prepare('INSERT OR IGNORE INTO notification_history(device_id,alert_id,train_number,station_code,event_type,event_key) VALUES(?,?,?,?,?,?)').bind(d.id,Number(rule.dbid)||0,c.num,c.station,c.type,c.key).run();sent++}
      else if(r.status===404||r.status===400){console.warn('FCM rejected token',r.status)}
     }
    }
   }
  }
- await env.DB.prepare('DELETE FROM deliveries WHERE created_at < ?').bind(Date.now()-4*86400000).run();
+ await env.DB.prepare("DELETE FROM notification_history WHERE sent_at < datetime('now','-4 days')").run();
  console.log('Rail push notifications sent',sent);
 }
 export default {
  async fetch(request,env){
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
   const u=new URL(request.url);
-  if(u.pathname==='/'||u.pathname==='/health')return json({ok:true,service:'RJP Train Live API',version:'2.7',source:'Comboios Live — Rui Costa'});
+  if(u.pathname==='/'||u.pathname==='/health')return json({ok:true,service:'RJP Train Live API',version:'2.7.1',source:'Comboios Live — Rui Costa'});
   if(u.pathname==='/api/trains/active'&&request.method==='GET'){
    try{const r=await fetch(FEED,{headers:{Accept:'application/json'}});if(!r.ok)return json({error:'Fonte indisponível'},502);return new Response(r.body,{status:200,headers:{...cors,'Content-Type':'application/json','Cache-Control':'public,max-age=30'}})}catch{return json({error:'Fonte indisponível'},502)}
   }
@@ -87,16 +87,16 @@ export default {
    if(!env.DB)return json({error:'D1 não configurado'},503);
    let b;try{b=await request.json()}catch{return json({error:'JSON inválido'},400)}
    if(typeof b.id!=='string'||b.id.length>100||typeof b.secret!=='string'||b.secret.length<30||b.secret.length>150||typeof b.token!=='string'||b.token.length<20||b.token.length>4096)return json({error:'Dados inválidos'},400);
-   const old=await env.DB.prepare('SELECT secret FROM devices WHERE id=?').bind(b.id).first();
+   const old=await env.DB.prepare('SELECT device_secret AS secret FROM push_subscriptions WHERE device_id=?').bind(b.id).first();
    if(old&&old.secret!==b.secret)return json({error:'Sem autorização'},403);
    if(u.pathname.endsWith('/register')){
-    await env.DB.prepare('INSERT INTO devices(id,secret,token,rules,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET token=excluded.token,updated_at=excluded.updated_at').bind(b.id,b.secret,b.token,'[]',Date.now()).run();return json({ok:true});
+    await env.DB.prepare('INSERT INTO push_subscriptions(device_id,device_secret,fcm_token,rules,updated_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(device_id) DO UPDATE SET fcm_token=excluded.fcm_token,updated_at=CURRENT_TIMESTAMP').bind(b.id,b.secret,b.token,'[]').run();return json({ok:true});
    }
    if(!old)return json({error:'Dispositivo não registado'},404);
    if(!Array.isArray(b.rules)||b.rules.length>30)return json({error:'Máximo de 30 alertas'},400);
    const rules=b.rules.map(r=>({id:String(r.id||'').slice(0,80),scope:r.scope,target:String(r.target||'').slice(0,120),event:r.event,lead:Number(r.lead),enabled:!!r.enabled}));
    if(rules.some(r=>!r.id||!['station','train'].includes(r.scope)||!r.target||!['arrival','departure','both'].includes(r.event)||![5,10,15].includes(r.lead)))return json({error:'Regra inválida'},400);
-   await env.DB.prepare('UPDATE devices SET token=?,rules=?,updated_at=? WHERE id=?').bind(b.token,JSON.stringify(rules),Date.now(),b.id).run();return json({ok:true,count:rules.length});
+   await env.DB.prepare('UPDATE push_subscriptions SET fcm_token=?,rules=?,updated_at=CURRENT_TIMESTAMP WHERE device_id=?').bind(b.token,JSON.stringify(rules),b.id).run();return json({ok:true,count:rules.length});
   }
   return json({error:'Not found'},404);
  },
