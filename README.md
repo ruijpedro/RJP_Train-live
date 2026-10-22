@@ -77,3 +77,7 @@ Botão **🔔 Alertas**: guardar regras por estação (nome igual ao recebido no
 Fonte de dados de circulação atribuída explicitamente à **WebApp Comboios Live — Rui Costa**, por intermédio da RJP API / Cloudflare Worker.
 
 Testes: `node --test tests/*.test.mjs`.
+
+
+## V2.7 — Push Android com a app fechada
+Ver [PUSH_V2_7_CONFIGURACAO.md](PUSH_V2_7_CONFIGURACAO.md). Requer Firebase e Cloudflare D1 configurados; o ZIP não inclui credenciais.

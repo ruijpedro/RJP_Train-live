@@ -1,3 +1,13 @@
 name = "rjp-train-live-api"
 main = "worker.js"
-compatibility_date = "2026-09-28"
+compatibility_date = "2026-10-22"
+
+[triggers]
+crons = ["* * * * *"]
+
+# ATENÇÃO: Antes de fazer deploy com Wrangler, adicionar a ligação D1
+# com o database_id real do painel Cloudflare. O binding deve chamar-se DB.
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "rjp-train-live-db"
+# database_id = "ID_REAL_DA_BASE"

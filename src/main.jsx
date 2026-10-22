@@ -1,6 +1,10 @@
 
 import React,{useEffect,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
+import{Capacitor}from"@capacitor/core";
+import{LocalNotifications}from"@capacitor/local-notifications";
+import{PushNotifications}from"@capacitor/push-notifications";
+import{initPush,savePushRules,pushState}from"./push.js";
 import L from"leaflet";import"./style.css";
 import{getSavedAlerts,dispatchAlerts,ALERTS_KEY}from"./alerts.js";
 const DEFAULT_API="https://rjp-train-live-api.rjpedro.workers.dev/api";
@@ -27,13 +31,35 @@ function directTrain(x){
  trainStops:stops,source:"Comboios Live / Rui Costa"}}
 
 const n=v=>v??"—";
+async function requestAlertPermission(){
+ if(Capacitor.isNativePlatform()){
+  const state=await LocalNotifications.requestPermissions();
+  if(state.display==='granted'){
+   await LocalNotifications.createChannel({id:'rail_alerts',name:'Alertas Ferroviários',description:'Chegadas, partidas e atrasos ferroviários',importance:4,visibility:1,vibration:true,sound:'default'}).catch(console.warn);
+  }
+  return state.display==='granted';
+ }
+ if(!('Notification'in window))return false;
+ return (await Notification.requestPermission())==='granted';
+}
+async function showNotification(title,body,tag){
+ if(Capacitor.isNativePlatform()){
+  const permission=await LocalNotifications.checkPermissions();
+  if(permission.display!=='granted')return false;
+  const id=(Math.abs([...String(tag)].reduce((n,c)=>(n*31+c.charCodeAt(0))|0,17))%2147483646)+1;
+  await LocalNotifications.schedule({notifications:[{id,title,body,channelId:'rail_alerts',smallIcon:'ic_stat_rail',schedule:{at:new Date(Date.now()+1000)},extra:{source:'Comboios Live — Rui Costa'}}]});
+  return true;
+ }
+ if('Notification'in window&&Notification.permission==='granted'){
+  new Notification(title,{body,icon:`${BASE}icons/icon-192.png`,tag});return true;
+ }
+ return false;
+}
 function sendAlert(c){
  const action=c.type==='arrival'?'chegada':'partida';
  const title=`🚆 Comboio ${c.train} · ${action}`;
  const body=`${c.station}: ${c.time} (previsto)${c.delay>0?` · atraso +${c.delay} min`:''}. Fonte: Comboios Live — Rui Costa.`;
- if('Notification'in window&&Notification.permission==='granted'){
-  try{new Notification(title,{body,icon:`${BASE}icons/icon-192.png`,tag:c.key})}catch(e){console.warn(e)}
- }
+ showNotification(title,body,c.key).catch(console.error);
 }
 
 function App(){
@@ -75,28 +101,35 @@ function App(){
   } finally { setLoading(false); }
  }
  useEffect(()=>{load();let i=setInterval(load,30000);return()=>clearInterval(i)},[]);
- function addAlert(){
+ async function addAlert(){
   const target=alertTarget.trim();if(!target){setAlertMsg('Indica a estação ou o número do comboio.');return}
   const rule={id:Date.now().toString(36),scope:alertScope,target,event:alertEvent,lead:Number(alertLead),enabled:true};
-  const next=[...alerts,rule];setAlerts(next);localStorage.setItem(ALERTS_KEY,JSON.stringify(next));setAlertMsg('Alerta guardado neste dispositivo.');setAlertTarget('');
+  const next=[...alerts,rule];setAlerts(next);localStorage.setItem(ALERTS_KEY,JSON.stringify(next));savePushRules(next).catch(console.warn);setAlertMsg('Alerta guardado neste dispositivo.');setAlertTarget('');if(Capacitor.isNativePlatform())await enableNotifications();
  }
- function removeAlert(id){const next=alerts.filter(a=>a.id!==id);setAlerts(next);localStorage.setItem(ALERTS_KEY,JSON.stringify(next))}
+ function removeAlert(id){const next=alerts.filter(a=>a.id!==id);setAlerts(next);localStorage.setItem(ALERTS_KEY,JSON.stringify(next));savePushRules(next).catch(console.warn)}
  async function enableNotifications(){
-  if(!('Notification'in window)){setAlertMsg('Este navegador não suporta notificações Web.');return}
-  try{const p=await Notification.requestPermission();setAlertMsg(p==='granted'?'Notificações autorizadas.':'Permissão não concedida.')}catch{setAlertMsg('Não foi possível pedir a permissão.')}
+  try{const ok=await requestAlertPermission();if(ok&&Capacitor.isNativePlatform())await initPush(LOCAL_API,getSavedAlerts());setAlertMsg(ok?'Notificações autorizadas no dispositivo.':'Permissão não concedida. Verifica as definições da aplicação.')}catch(e){console.error(e);setAlertMsg('Não foi possível ativar as notificações.')} 
  }
+ async function testNotification(){
+  try{
+   const ok=await requestAlertPermission();if(!ok){setAlertMsg('Autoriza as notificações para realizar o teste.');return}
+   const sent=await showNotification('🚆 RJP Train Live · Teste','Notificações ferroviárias ativas. Fonte: WebApp Comboios Live — Rui Costa.',`test-${Date.now()}`);
+   setAlertMsg(sent?'Notificação de teste enviada. Confirma na barra de notificações.':'Não foi possível apresentar a notificação.');
+  }catch(e){console.error(e);setAlertMsg('Falha no teste de notificação.')} 
+ }
+
  let filtered=trains.filter(t=>JSON.stringify(t).toLowerCase().includes(q.toLowerCase()));
- return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2.6</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>Fonte dos dados: <b>WebApp Comboios Live — Rui Costa</b></small></div></header>
+ return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2.7.0</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>Fonte dos dados: <b>WebApp Comboios Live — Rui Costa</b></small></div></header>
  <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button className={loading?"refresh loading":"refresh"} onClick={load} disabled={loading}><span>↻</span>{loading?" A atualizar…":" Atualizar agora"}</button><button className="alertsButton" onClick={()=>setAlertOpen(v=>!v)}>🔔 Alertas ({alerts.length})</button></nav>
  <section className="stats"><div><b>{trains.length}</b><small>comboios recebidos</small></div><div><b>{trains.filter(t=>+(t.delayMinutes??t.delay??0)>0).length}</b><small>com atraso</small></div><div><b>{updated?updated.toLocaleTimeString("pt-PT"):"—"}</b><small>última atualização</small></div></section>
  {alertOpen&&<section className="alertsPanel"><div className="alertsHeading"><h2>🔔 Alertas ferroviários</h2><button onClick={()=>setAlertOpen(false)} aria-label="Fechar alertas">×</button></div>
- <p>Alertas de horários previstos, baseados na WebApp Comboios Live — Rui Costa. Funcionam enquanto a aplicação está aberta e ligada à Internet; não são notificações push com a app fechada.</p>
+ <p>Alertas de horários previstos, baseados na WebApp Comboios Live — Rui Costa. Com Firebase e o Worker configurados, os avisos push podem chegar mesmo com a aplicação fechada. Os horários são previstos, não confirmações de circulação.</p>
  <div className="alertsForm"><label>Monitorizar<select value={alertScope} onChange={e=>setAlertScope(e.target.value)}><option value="station">Estação</option><option value="train">Comboio</option></select></label>
  <label>{alertScope==='station'?'Nome exato da estação':'Número do comboio'}<input value={alertTarget} onChange={e=>setAlertTarget(e.target.value)} placeholder={alertScope==='station'?'Ex.: Leiria':'Ex.: 129'} list={alertScope==='station'?'stationsList':undefined}/></label>
  <datalist id="stationsList">{[...new Set(trains.flatMap(t=>(t.trainStops||[]).map(s=>s?.station?.designation).filter(Boolean)))].sort().map(st=><option key={st} value={st}/>)}</datalist>
  <label>Evento<select value={alertEvent} onChange={e=>setAlertEvent(e.target.value)}><option value="both">Chegada e partida</option><option value="arrival">Chegada</option><option value="departure">Partida</option></select></label>
  <label>Antecedência<select value={alertLead} onChange={e=>setAlertLead(+e.target.value)}><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option></select></label>
- <button onClick={addAlert}>+ Guardar alerta</button><button onClick={enableNotifications} className="secondary">Autorizar notificações</button></div>
+ <button onClick={addAlert}>+ Guardar alerta</button><button onClick={enableNotifications} className="secondary">Autorizar notificações</button><button onClick={testNotification} className="secondary">🔔 Testar notificação local</button><button onClick={async()=>{try{await initPush(LOCAL_API,getSavedAlerts());setAlertMsg(pushState())}catch(e){setAlertMsg(`Push não configurado: ${e.message}`)}}} className="secondary">☁️ Ativar push em segundo plano</button></div>
  {alertMsg&&<p role="status">{alertMsg}</p>}
  <div className="alertRules">{alerts.length===0?<p>Sem alertas configurados.</p>:alerts.map(a=><div className="alertRule" key={a.id}><span><b>{a.scope==='station'?'Estação':'Comboio'}: {a.target}</b><small>{a.event==='both'?'Chegada e partida':a.event==='arrival'?'Chegada':'Partida'} · {a.lead} min antes</small></span><button onClick={()=>removeAlert(a.id)} aria-label={`Remover alerta ${a.target}`}>Remover</button></div>)}</div>
  </section>}
