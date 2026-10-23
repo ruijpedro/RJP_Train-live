@@ -15,3 +15,12 @@ test('combined alert only matches the selected train at the selected station',()
  assert.equal(candidates[0].station,'Monte Real');
  assert.equal(candidates[0].train,'6450');
 });
+test('pre-alert can be disabled without deleting arrival monitoring',()=>{
+ const r=alertCandidates(trains,[{id:'x',scope:'station',target:'Leiria',event:'arrival',lead:10,enabled:true,notifyBefore:false,notifyOnArrival:true}],now);
+ assert.equal(r.length,0);
+});
+test('selected weekdays are enforced for local pre-alerts',()=>{
+ const weekday=(now.getDay()+6)%7;
+ const r=alertCandidates(trains,[{id:'x',scope:'station',target:'Leiria',event:'arrival',lead:10,enabled:true,days:[(weekday+1)%7]}],now);
+ assert.equal(r.length,0);
+});

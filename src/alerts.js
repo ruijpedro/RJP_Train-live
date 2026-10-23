@@ -9,7 +9,8 @@ export function timeToday(hhmm,now=new Date()){
 export function alertCandidates(trains,alerts,now=new Date()){
  const result=[];
  for(const rule of alerts){
-  if(!rule.enabled||!rule.target?.trim())continue;
+  if(!rule.enabled||!rule.target?.trim()||rule.notifyBefore===false)continue;
+  const weekday=(now.getDay()+6)%7;if(Array.isArray(rule.days)&&!rule.days.includes(weekday))continue;
   for(const train of trains){
    const id=String(train.trainNumber??train.id??'');
    if(['train','combined'].includes(rule.scope)&&clean(id)!==clean(rule.target))continue;
