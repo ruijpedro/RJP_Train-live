@@ -28,11 +28,12 @@ function timeToMs(clock,now){
 function matches(raw,rule,now){
  const fixed=raw.fixed||{},live=raw.data?.status||{},db=raw.db||{};
  const num=String(live.trainNumber??fixed.trainNumber??db.trainNumber??raw.train_id??'');
- if(rule.scope==='train'&&clean(rule.target)!==clean(num))return [];
+ if(['train','combined'].includes(rule.scope)&&clean(rule.target)!==clean(num))return [];
  const result=[];
  for(const stop of fixed.trainStops||[]){
   const station=stop.station?.designation||'';
   if(rule.scope==='station'&&clean(rule.target)!==clean(station))continue;
+  if(rule.scope==='combined'&&clean(rule.station)!==clean(station))continue;
   for(const type of ['arrival','departure']){
    if(rule.event!=='both'&&rule.event!==type)continue;
    const clock=type==='arrival'?(stop.ETA||stop.arrival):(stop.ETD||stop.departure);
@@ -46,13 +47,24 @@ function matches(raw,rule,now){
  return result;
 }
 async function sendFCM(auth,token,c){
- const title=`Comboio ${c.num} · ${c.type==='arrival'?'chegada':'partida'} prevista`;
- const body=`${c.station} às ${c.clock}. Fonte: WebApp Comboios Live — Rui Costa.`;
+ const title=c.test?'RJP Train Live · Teste remoto':`Comboio ${c.num} · ${c.type==='arrival'?'chegada':'partida'} prevista`;
+ const body=c.test?'Notificação enviada pelo Cloudflare e Firebase com a APK fechada.':`${c.station} às ${c.clock}. Fonte: WebApp Comboios Live — Rui Costa.`;
  const r=await fetch(`https://fcm.googleapis.com/v1/projects/${auth.project}/messages:send`,{method:'POST',headers:{Authorization:`Bearer ${auth.access}`,'Content-Type':'application/json'},body:JSON.stringify({message:{token,notification:{title,body},android:{priority:'high',notification:{channel_id:'rail_push'}}}})});
- return {ok:r.ok,status:r.status};
+ if(!r.ok)console.error('FCM envio falhou',r.status,(await r.text()).slice(0,400));return {ok:r.ok,status:r.status};
+}
+async function runTests(env){
+ const rows=await env.DB.prepare("SELECT q.device_id AS id,s.fcm_token AS token FROM push_test_queue q JOIN push_subscriptions s ON s.device_id=q.device_id WHERE q.due_at <= CURRENT_TIMESTAMP AND s.enabled=1 LIMIT 20").all();
+ let auth=null;
+ for(const d of rows.results){
+  try{if(!auth)auth=await firebaseToken(env);const r=await sendFCM(auth,d.token,{test:true});
+   if(r.ok)await env.DB.prepare('DELETE FROM push_test_queue WHERE device_id=?').bind(d.id).run();
+   else console.error('Push teste recusado',d.id,r.status);
+  }catch(e){console.error('Push teste falhou',d.id,e.message)}
+ }
 }
 async function check(env){
  if(!env.DB||!(env.FIREBASE_SERVICE_ACCOUNT||env.FIREBASE_SERVICE_ACCOUNT_JSON))return;
+ await runTests(env);
  const res=await fetch(FEED,{headers:{Accept:'application/json'}});if(!res.ok)throw Error('Fonte '+res.status);
  const trains=await res.json();if(!Array.isArray(trains))throw Error('Formato da fonte inválido');
  const devices=await env.DB.prepare('SELECT device_id AS id, fcm_token AS token, rules FROM push_subscriptions WHERE enabled=1').all();
@@ -79,11 +91,11 @@ export default {
  async fetch(request,env){
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
   const u=new URL(request.url);
-  if(u.pathname==='/'||u.pathname==='/health')return json({ok:true,service:'RJP Train Live API',version:'2.7.1',source:'Comboios Live — Rui Costa'});
+  if(u.pathname==='/'||u.pathname==='/health')return json({ok:true,service:'RJP Train Live API',version:'2.8.0',source:'Comboios Live — Rui Costa'});
   if(u.pathname==='/api/trains/active'&&request.method==='GET'){
    try{const r=await fetch(FEED,{headers:{Accept:'application/json'}});if(!r.ok)return json({error:'Fonte indisponível'},502);return new Response(r.body,{status:200,headers:{...cors,'Content-Type':'application/json','Cache-Control':'public,max-age=30'}})}catch{return json({error:'Fonte indisponível'},502)}
   }
-  if(['/api/push/register','/api/push/rules'].includes(u.pathname)&&request.method==='POST'){
+  if(['/api/push/register','/api/push/rules','/api/push/test'].includes(u.pathname)&&request.method==='POST'){
    if(!env.DB)return json({error:'D1 não configurado'},503);
    let b;try{b=await request.json()}catch{return json({error:'JSON inválido'},400)}
    if(typeof b.id!=='string'||b.id.length>100||typeof b.secret!=='string'||b.secret.length<30||b.secret.length>150||typeof b.token!=='string'||b.token.length<20||b.token.length>4096)return json({error:'Dados inválidos'},400);
@@ -93,9 +105,10 @@ export default {
     await env.DB.prepare('INSERT INTO push_subscriptions(device_id,device_secret,fcm_token,rules,updated_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(device_id) DO UPDATE SET fcm_token=excluded.fcm_token,updated_at=CURRENT_TIMESTAMP').bind(b.id,b.secret,b.token,'[]').run();return json({ok:true});
    }
    if(!old)return json({error:'Dispositivo não registado'},404);
+   if(u.pathname.endsWith('/test')){await env.DB.prepare("INSERT INTO push_test_queue(device_id,due_at) VALUES(?,datetime('now','+60 seconds')) ON CONFLICT(device_id) DO UPDATE SET due_at=excluded.due_at").bind(b.id).run();return json({ok:true,delay_seconds:60})}
    if(!Array.isArray(b.rules)||b.rules.length>30)return json({error:'Máximo de 30 alertas'},400);
-   const rules=b.rules.map(r=>({id:String(r.id||'').slice(0,80),scope:r.scope,target:String(r.target||'').slice(0,120),event:r.event,lead:Number(r.lead),enabled:!!r.enabled}));
-   if(rules.some(r=>!r.id||!['station','train'].includes(r.scope)||!r.target||!['arrival','departure','both'].includes(r.event)||![5,10,15].includes(r.lead)))return json({error:'Regra inválida'},400);
+   const rules=b.rules.map(r=>({id:String(r.id||'').slice(0,80),scope:r.scope,target:String(r.target||'').slice(0,120),station:String(r.station||'').slice(0,120),event:r.event,lead:Number(r.lead),enabled:!!r.enabled}));
+   if(rules.some(r=>!r.id||!['station','train','combined'].includes(r.scope)||(r.scope==='combined'&&!r.station)||!r.target||!['arrival','departure','both'].includes(r.event)||![5,10,15].includes(r.lead)))return json({error:'Regra inválida'},400);
    await env.DB.prepare('UPDATE push_subscriptions SET fcm_token=?,rules=?,updated_at=CURRENT_TIMESTAMP WHERE device_id=?').bind(b.token,JSON.stringify(rules),b.id).run();return json({ok:true,count:rules.length});
   }
   return json({error:'Not found'},404);

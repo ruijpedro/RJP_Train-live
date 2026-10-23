@@ -12,10 +12,11 @@ export function alertCandidates(trains,alerts,now=new Date()){
   if(!rule.enabled||!rule.target?.trim())continue;
   for(const train of trains){
    const id=String(train.trainNumber??train.id??'');
-   if(rule.scope==='train'&&clean(id)!==clean(rule.target))continue;
+   if(['train','combined'].includes(rule.scope)&&clean(id)!==clean(rule.target))continue;
    for(const stop of train.trainStops||[]){
     const station=stop?.station?.designation||'';
     if(rule.scope==='station'&&clean(station)!==clean(rule.target))continue;
+    if(rule.scope==='combined'&&clean(station)!==clean(rule.station))continue;
     for(const type of ['arrival','departure']){
      if(rule.event!=='both'&&rule.event!==type)continue;
      const time=type==='arrival'?(stop.ETA||stop.arrival):(stop.ETD||stop.departure);

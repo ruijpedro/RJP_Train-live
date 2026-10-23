@@ -4,7 +4,7 @@ import{createRoot}from"react-dom/client";
 import{Capacitor}from"@capacitor/core";
 import{LocalNotifications}from"@capacitor/local-notifications";
 import{PushNotifications}from"@capacitor/push-notifications";
-import{initPush,savePushRules,pushState}from"./push.js";
+import{initPush,savePushRules,pushState,scheduleRemotePushTest}from"./push.js";
 import L from"leaflet";import"./style.css";
 import{getSavedAlerts,dispatchAlerts,ALERTS_KEY}from"./alerts.js";
 const DEFAULT_API="https://rjp-train-live-api.rjpedro.workers.dev/api";
@@ -63,7 +63,7 @@ function sendAlert(c){
 }
 
 function App(){
- const mapRef=useRef(),layers=useRef({}); const [alerts,setAlerts]=useState(getSavedAlerts),[alertOpen,setAlertOpen]=useState(false),[alertScope,setAlertScope]=useState("station"),[alertTarget,setAlertTarget]=useState(""),[alertEvent,setAlertEvent]=useState("both"),[alertLead,setAlertLead]=useState(10),[alertMsg,setAlertMsg]=useState(""); const[trains,setTrains]=useState([]),[sel,setSel]=useState(),[q,setQ]=useState(""),[status,setStatus]=useState("A ligar…"),[updated,setUpdated]=useState(),[loading,setLoading]=useState(false);
+ const mapRef=useRef(),layers=useRef({}); const [alerts,setAlerts]=useState(getSavedAlerts),[alertOpen,setAlertOpen]=useState(false),[alertScope,setAlertScope]=useState("station"),[alertStation,setAlertStation]=useState(""),[alertTarget,setAlertTarget]=useState(""),[alertEvent,setAlertEvent]=useState("both"),[alertLead,setAlertLead]=useState(10),[alertMsg,setAlertMsg]=useState(""); const[trains,setTrains]=useState([]),[sel,setSel]=useState(),[q,setQ]=useState(""),[status,setStatus]=useState("A ligar…"),[updated,setUpdated]=useState(),[loading,setLoading]=useState(false);
  useEffect(()=>{let m=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);mapRef.current=m;
  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",opacity:.72}).addTo(m);
  // Railway-first overlay: visible immediately when the app opens.
@@ -103,12 +103,13 @@ function App(){
  useEffect(()=>{load();let i=setInterval(load,30000);return()=>clearInterval(i)},[]);
  async function addAlert(){
   const target=alertTarget.trim();if(!target){setAlertMsg('Indica a estação ou o número do comboio.');return}
-  const rule={id:Date.now().toString(36),scope:alertScope,target,event:alertEvent,lead:Number(alertLead),enabled:true};
-  const next=[...alerts,rule];setAlerts(next);localStorage.setItem(ALERTS_KEY,JSON.stringify(next));savePushRules(next).catch(console.warn);setAlertMsg('Alerta guardado neste dispositivo.');setAlertTarget('');if(Capacitor.isNativePlatform())await enableNotifications();
+  const rule={id:Date.now().toString(36),scope:alertScope,target,station:alertScope==='combined'?alertStation.trim():'',event:alertEvent,lead:Number(alertLead),enabled:true};
+  if(alertScope==='combined'&&!rule.station){setAlertMsg('Indica a estação para o alerta combinado.');return}
+  const next=[...alerts,rule];setAlerts(next);localStorage.setItem(ALERTS_KEY,JSON.stringify(next));savePushRules(next).then(r=>setAlertMsg(r?.pending?'Alerta guardado localmente. Ativa push para sincronizar.':'Alerta guardado e sincronizado com o servidor.')).catch(e=>setAlertMsg('Alerta local guardado, mas sincronização falhou: '+e.message));setAlertTarget('');if(Capacitor.isNativePlatform())await enableNotifications();
  }
  function removeAlert(id){const next=alerts.filter(a=>a.id!==id);setAlerts(next);localStorage.setItem(ALERTS_KEY,JSON.stringify(next));savePushRules(next).catch(console.warn)}
  async function enableNotifications(){
-  try{const ok=await requestAlertPermission();if(ok&&Capacitor.isNativePlatform())await initPush(LOCAL_API,getSavedAlerts());setAlertMsg(ok?'Notificações autorizadas no dispositivo.':'Permissão não concedida. Verifica as definições da aplicação.')}catch(e){console.error(e);setAlertMsg('Não foi possível ativar as notificações.')} 
+  try{const ok=await requestAlertPermission();if(ok&&Capacitor.isNativePlatform())await initPush(LOCAL_API,getSavedAlerts());setAlertMsg(ok?(Capacitor.isNativePlatform()?pushState():'Notificações autorizadas.'):'Permissão não concedida. Verifica as definições da aplicação.')}catch(e){console.error(e);setAlertMsg('Não foi possível ativar as notificações.')} 
  }
  async function testNotification(){
   try{
@@ -119,19 +120,20 @@ function App(){
  }
 
  let filtered=trains.filter(t=>JSON.stringify(t).toLowerCase().includes(q.toLowerCase()));
- return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2.7.0</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>Fonte dos dados: <b>WebApp Comboios Live — Rui Costa</b></small></div></header>
+ return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2.8.0</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>Fonte dos dados: <b>WebApp Comboios Live — Rui Costa</b></small></div></header>
  <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button className={loading?"refresh loading":"refresh"} onClick={load} disabled={loading}><span>↻</span>{loading?" A atualizar…":" Atualizar agora"}</button><button className="alertsButton" onClick={()=>setAlertOpen(v=>!v)}>🔔 Alertas ({alerts.length})</button></nav>
  <section className="stats"><div><b>{trains.length}</b><small>comboios recebidos</small></div><div><b>{trains.filter(t=>+(t.delayMinutes??t.delay??0)>0).length}</b><small>com atraso</small></div><div><b>{updated?updated.toLocaleTimeString("pt-PT"):"—"}</b><small>última atualização</small></div></section>
  {alertOpen&&<section className="alertsPanel"><div className="alertsHeading"><h2>🔔 Alertas ferroviários</h2><button onClick={()=>setAlertOpen(false)} aria-label="Fechar alertas">×</button></div>
  <p>Alertas de horários previstos, baseados na WebApp Comboios Live — Rui Costa. Com Firebase e o Worker configurados, os avisos push podem chegar mesmo com a aplicação fechada. Os horários são previstos, não confirmações de circulação.</p>
- <div className="alertsForm"><label>Monitorizar<select value={alertScope} onChange={e=>setAlertScope(e.target.value)}><option value="station">Estação</option><option value="train">Comboio</option></select></label>
- <label>{alertScope==='station'?'Nome exato da estação':'Número do comboio'}<input value={alertTarget} onChange={e=>setAlertTarget(e.target.value)} placeholder={alertScope==='station'?'Ex.: Leiria':'Ex.: 129'} list={alertScope==='station'?'stationsList':undefined}/></label>
+ <div className="alertsForm"><label>Monitorizar<select value={alertScope} onChange={e=>setAlertScope(e.target.value)}><option value="station">Estação</option><option value="train">Comboio</option><option value="combined">Comboio + estação</option></select></label>
+ <label>{alertScope==='station'?'Nome exato da estação':'Número do comboio'}<input value={alertTarget} onChange={e=>setAlertTarget(e.target.value)} placeholder={alertScope==='station'?'Ex.: Leiria':'Ex.: 6450'} list={alertScope==='station'?'stationsList':undefined}/></label>
+ {alertScope==='combined'&&<label>Estação de destino do alerta<input value={alertStation} onChange={e=>setAlertStation(e.target.value)} placeholder='Ex.: Monte Real' list='stationsList'/></label>}
  <datalist id="stationsList">{[...new Set(trains.flatMap(t=>(t.trainStops||[]).map(s=>s?.station?.designation).filter(Boolean)))].sort().map(st=><option key={st} value={st}/>)}</datalist>
  <label>Evento<select value={alertEvent} onChange={e=>setAlertEvent(e.target.value)}><option value="both">Chegada e partida</option><option value="arrival">Chegada</option><option value="departure">Partida</option></select></label>
  <label>Antecedência<select value={alertLead} onChange={e=>setAlertLead(+e.target.value)}><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option></select></label>
- <button onClick={addAlert}>+ Guardar alerta</button><button onClick={enableNotifications} className="secondary">Autorizar notificações</button><button onClick={testNotification} className="secondary">🔔 Testar notificação local</button><button onClick={async()=>{try{await initPush(LOCAL_API,getSavedAlerts());setAlertMsg(pushState())}catch(e){setAlertMsg(`Push não configurado: ${e.message}`)}}} className="secondary">☁️ Ativar push em segundo plano</button></div>
+ <button onClick={addAlert}>+ Guardar alerta</button><button onClick={enableNotifications} className="secondary">Autorizar notificações</button><button onClick={testNotification} className="secondary">🔔 Testar notificação local</button><button onClick={async()=>{setAlertMsg('A verificar o registo Firebase…');try{setAlertMsg(await initPush(LOCAL_API,getSavedAlerts()))}catch(e){setAlertMsg(`Push não configurado: ${e.message}`)}}} className="secondary">☁️ Ativar push em segundo plano</button><button onClick={async()=>{try{const r=await scheduleRemotePushTest();setAlertMsg(`Teste remoto agendado para daqui a ${r.delay_seconds} segundos. Fecha agora a APK e bloqueia o ecrã.`)}catch(e){setAlertMsg('Teste remoto: '+e.message)}}} className="secondary">📡 Testar push remoto (60 segundos)</button></div>
  {alertMsg&&<p role="status">{alertMsg}</p>}
- <div className="alertRules">{alerts.length===0?<p>Sem alertas configurados.</p>:alerts.map(a=><div className="alertRule" key={a.id}><span><b>{a.scope==='station'?'Estação':'Comboio'}: {a.target}</b><small>{a.event==='both'?'Chegada e partida':a.event==='arrival'?'Chegada':'Partida'} · {a.lead} min antes</small></span><button onClick={()=>removeAlert(a.id)} aria-label={`Remover alerta ${a.target}`}>Remover</button></div>)}</div>
+ <div className="alertRules">{alerts.length===0?<p>Sem alertas configurados.</p>:alerts.map(a=><div className="alertRule" key={a.id}><span><b>{a.scope==='station'?'Estação':a.scope==='combined'?'Comboio + estação':'Comboio'}: {a.target}{a.station?' → '+a.station:''}</b><small>{a.event==='both'?'Chegada e partida':a.event==='arrival'?'Chegada':'Partida'} · {a.lead} min antes</small></span><button onClick={()=>removeAlert(a.id)} aria-label={`Remover alerta ${a.target}`}>Remover</button></div>)}</div>
  </section>}
  <div id="map"/>
  <aside><h3>Comboios</h3>{filtered.slice(0,100).map((t,i)=>{let d=+(t.delayMinutes??t.delay??0);return <article key={i} onClick={()=>setSel(t)}><b>🚆 {n(t.trainNumber??t.number??t.id)}</b><span className={d>0?"late":"ok"}>{d>0?`+${d} min`:"A horas"}</span><small>{n(t.origin?.designation??t.origin)} → {n(t.destination?.designation??t.destination)}</small></article>})}</aside>
