@@ -5,7 +5,23 @@ const clean=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').tri
 function b64url(bytes){return btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
 function fromPem(pem){return Uint8Array.from(atob(pem.replace(/-----[^-]+-----/g,'').replace(/\s/g,'')),c=>c.charCodeAt(0))}
 async function firebaseToken(env){
- const sa=JSON.parse((env.FIREBASE_SERVICE_ACCOUNT||env.FIREBASE_SERVICE_ACCOUNT_JSON));
+  const raw=env.FIREBASE_SERVICE_ACCOUNT||env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if(!raw)throw Error('Firebase: segredo FIREBASE_SERVICE_ACCOUNT em falta');
+  let sa;
+  try {
+    const value=String(raw).trim();
+    if(value.startsWith('{')) sa=JSON.parse(value);
+    else {
+      // Support base64 service-account JSON as well as plain JSON.
+      const decoded=atob(value.replace(/\s/g,''));
+      sa=JSON.parse(decoded);
+    }
+  } catch {
+    throw Error('Firebase: segredo inválido. Esperado JSON de conta de serviço ou JSON codificado em Base64. Verificar Settings > Variables and Secrets.');
+  }
+  if(!sa || typeof sa!=='object' || !sa.project_id || !sa.client_email || !sa.private_key) {
+    throw Error('Firebase: conta de serviço sem project_id, client_email ou private_key');
+  }
  const now=Math.floor(Date.now()/1000);
  const header=b64url(new TextEncoder().encode(JSON.stringify({alg:'RS256',typ:'JWT'})));
  const payload=b64url(new TextEncoder().encode(JSON.stringify({iss:sa.client_email,scope:'https://www.googleapis.com/auth/firebase.messaging',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+3500})));
@@ -13,7 +29,7 @@ async function firebaseToken(env){
  const signature=b64url(new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,new TextEncoder().encode(`${header}.${payload}`))));
  const body=new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:`${header}.${payload}.${signature}`});
  const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
- if(!r.ok)throw Error('Firebase OAuth '+r.status);return {access:(await r.json()).access_token,project:sa.project_id};
+ if(!r.ok)throw Error('Firebase OAuth HTTP '+r.status);const tokenData=await r.json();if(!tokenData.access_token)throw Error('Firebase OAuth: resposta sem access_token');return {access:tokenData.access_token,project:sa.project_id};
 }
 function timeToMs(clock,now){
  if(typeof clock!=='string'||!/^(?:[01]?\d|2[0-3]):[0-5]\d$/.test(clock))return null;
@@ -120,7 +136,7 @@ export default {
  async fetch(request,env){
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
   const u=new URL(request.url);
-  if(u.pathname==='/'||u.pathname==='/health')return json({ok:true,service:'RJP Train Live API',version:'2.9.0',source:'Comboios Live — Rui Costa'});
+  if(u.pathname==='/'||u.pathname==='/health')return json({ok:true,service:'RJP Train Live API',version:'2.9.1',source:'Comboios Live — Rui Costa'});
   if(u.pathname==='/api/trains/active'&&request.method==='GET'){
    try{const r=await fetch(FEED,{headers:{Accept:'application/json'}});if(!r.ok)return json({error:'Fonte indisponível'},502);return new Response(r.body,{status:200,headers:{...cors,'Content-Type':'application/json','Cache-Control':'public,max-age=30'}})}catch{return json({error:'Fonte indisponível'},502)}
   }
