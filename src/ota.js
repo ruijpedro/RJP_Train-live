@@ -58,12 +58,39 @@ export async function installOtaUpdate(m){
   nativeProbe='Android HTTP erro: '+(e?.message||String(e));
  }
  console.info('[RJP OTA] native HTTP probe',nativeProbe);
+ let nativeFull='não executado';
+ try {
+  const result=await CapacitorHttp.request({
+   url:m.url,
+   method:'GET',
+   responseType:'arraybuffer',
+   connectTimeout:15000,
+   readTimeout:60000,
+   headers:{'Cache-Control':'no-cache'}
+  });
+  const payload=result.data;
+  const dataType=payload instanceof ArrayBuffer?'ArrayBuffer':ArrayBuffer.isView(payload)?'TypedArray':typeof payload;
+  let byteCount='desconhecido';
+  if(payload instanceof ArrayBuffer)byteCount=payload.byteLength;
+  else if(ArrayBuffer.isView(payload))byteCount=payload.byteLength;
+  else if(typeof payload==='string'){
+   const raw=payload.replace(/^data:[^,]*,/, '');
+   if(/^[A-Za-z0-9+/]*={0,2}$/.test(raw)&&raw.length%4===0){
+    const pad=(raw.match(/=+$/)||[''])[0].length;
+    byteCount=raw.length/4*3-pad;
+   }else byteCount='texto ('+raw.length+' caracteres)';
+  }
+  nativeFull='GET Android HTTP '+result.status+', dados='+byteCount+' bytes, formato='+dataType;
+ }catch(e){
+  nativeFull='GET Android erro: '+(e?.message||String(e));
+ }
+ console.info('[RJP OTA] native full ZIP test',nativeFull);
  try {
   bundle=await CapacitorUpdater.download({url:m.url,version:m.version});
  } catch(e) {
   const detail=[e?.message,e?.code,e?.status,e?.statusCode].filter(v=>v!==undefined&&v!==null).join(' | ');
   console.error('[RJP OTA] native download failed', {version:m.version,url:m.url,error:e});
-  throw Error('Falha na descarga nativa Capgo: '+(detail||String(e))+' | Teste HTTP: '+preflight+' | Teste Android: '+nativeProbe);
+  throw Error('Falha na descarga nativa Capgo: '+(detail||String(e))+' | Teste HTTP: '+preflight+' | Teste Android: '+nativeProbe+' | ZIP completo: '+nativeFull);
  }
  if(!bundle?.id)throw Error('Capgo não devolveu um identificador de pacote.');
  try {
