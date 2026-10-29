@@ -146,6 +146,25 @@ jobs:
           p.write_text(s)
           print(f'Android versionCode: {version_code}')
           PYSIGN
+      - name: Expor motivo real de erro do Capgo no diagnostico OTA
+        shell: bash
+        run: |
+          python3 - <<'PYCAPGO'
+          from pathlib import Path
+          root = Path('node_modules/@capgo/capacitor-updater/android/src/main/java')
+          matches = list(root.rglob('CapacitorUpdaterPlugin.java'))
+          if len(matches) != 1:
+              raise RuntimeError(f'Esperado um plugin Capgo, encontrados: {len(matches)}')
+          p = matches[0]
+          s = p.read_text()
+          old = 'call.reject("Failed to download from: " + url, e);'
+          new = 'call.reject("Failed to download from: " + url + " | Cause: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);'
+          count = s.count(old)
+          if count < 1:
+              raise RuntimeError('Assinatura de erro Capgo nao encontrada; verificar versao do plugin')
+          p.write_text(s.replace(old, new))
+          print(f'Capgo: {count} mensagens de erro nativo detalhadas')
+          PYCAPGO
       - name: Compilar APK Release assinada
         if: github.event_name != 'pull_request'
         working-directory: android
