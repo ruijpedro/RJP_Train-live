@@ -2,7 +2,7 @@ name: RJP Train Live - Web + Android APK
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, fix/ota-download-diagnostics]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
@@ -168,6 +168,6 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: RJP-Train-Live-V2.12-Release-Signed
+          name: RJP-Train-Live-V2.12-OTA-Diagnostic-Signed
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
