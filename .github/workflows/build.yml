@@ -1,3 +1,9 @@
+          set -euo pipefail
+          test -n "$GOOGLE_SERVICES_JSON_B64" || { echo '::error::Falta GOOGLE_SERVICES_JSON_B64'; exit 1; }
+          printf '%s' "$GOOGLE_SERVICES_JSON_B64" | base64 --decode > android/app/google-services.json
+          python3 - <<'PYGRADLE'
+          from pathlib import Path
+          top = Path('android/build.gradle')
           s = top.read_text()
           if 'com.google.gms:google-services' not in s:
               s = s.replace('dependencies {', "dependencies {\n        classpath 'com.google.gms:google-services:4.4.2'", 1)
@@ -8,9 +14,9 @@
               s += "\napply plugin: 'com.google.gms.google-services'\n"
           app.write_text(s)
           PYGRADLE
-      - name: Sync Capacitor
+      - name: Sincronizar Capacitor
         run: npx cap sync android
-      - name: Apply RJP Train Live icon safely
+      - name: Aplicar icone RJP Train Live
         shell: bash
         run: |
           set -euo pipefail
@@ -21,7 +27,7 @@
           fi
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's#android:roundIcon="@mipmap/ic_launcher_round"#android:roundIcon="@mipmap/ic_launcher"#g' "$MANIFEST"
-      - name: Ensure Android notification permission
+      - name: Garantir permissao de notificacoes
         run: |
           python3 - <<'PYANDROID'
           from pathlib import Path
@@ -32,7 +38,7 @@
               s = s.replace('<application', perm + '\n    <application', 1)
           p.write_text(s)
           PYANDROID
-      - name: Configure permanent release signing and version
+      - name: Configurar assinatura Release permanente
         if: github.event_name != 'pull_request'
         shell: bash
         env:
@@ -44,7 +50,7 @@
         run: |
           set -euo pipefail
           for key in RJP_KEYSTORE_B64 RJP_KEYSTORE_PASSWORD RJP_KEY_PASSWORD RJP_KEY_ALIAS; do
-            test -n "${!key:-}" || { echo "::error::Missing secret: $key"; exit 1; }
+            test -n "${!key:-}" || { echo "::error::Falta o Secret $key"; exit 1; }
           done
           printf '%s' "$RJP_KEYSTORE_B64" | base64 --decode > android/app/rjp-release.jks
           keytool -list -keystore android/app/rjp-release.jks -storepass "$RJP_KEYSTORE_PASSWORD" -alias "$RJP_KEY_ALIAS" >/dev/null
@@ -54,7 +60,7 @@
           p = Path('android/app/build.gradle')
           s = p.read_text()
           if 'buildTypes {' not in s or 'release {' not in s:
-              raise RuntimeError('Unexpected Gradle structure')
+              raise RuntimeError('Estrutura Gradle inesperada')
           signing = """signingConfigs {
               rjpRelease {
                   storeFile file('rjp-release.jks')
@@ -66,18 +72,17 @@
           buildTypes {"""
           s = s.replace('buildTypes {', signing, 1)
           s = s.replace('release {', 'release {\n            signingConfig signingConfigs.rjpRelease', 1)
-          # Keep the code above earlier builds; subsequent workflow runs increase it.
           version_code = 212000 + int(os.environ['RUN_NUMBER'])
           s, n = re.subn(r'\bversionCode\s+\d+', f'versionCode {version_code}', s, count=1)
           if n != 1:
-              raise RuntimeError('versionCode not found')
+              raise RuntimeError('versionCode nao encontrado')
           s, n = re.subn(r'\bversionName\s+["\'][^"\']+["\']', 'versionName "2.12.0"', s, count=1)
           if n != 1:
-              raise RuntimeError('versionName not found')
+              raise RuntimeError('versionName nao encontrado')
           p.write_text(s)
           print(f'Android versionCode: {version_code}')
           PYSIGN
-      - name: Build signed Release APK
+      - name: Compilar APK Release assinada
         if: github.event_name != 'pull_request'
         working-directory: android
         env:
@@ -85,17 +90,17 @@
           RJP_KEY_PASSWORD: ${{ secrets.RJP_KEY_PASSWORD }}
           RJP_KEY_ALIAS: ${{ secrets.RJP_KEY_ALIAS }}
         run: chmod +x gradlew && ./gradlew assembleRelease
-      - name: Verify APK signing certificate
+      - name: Verificar certificado da APK
         if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
           APK="android/app/build/outputs/apk/release/app-release.apk"
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
-          test -n "$APKSIGNER" || { echo '::error::apksigner not found'; exit 1; }
+          test -n "$APKSIGNER" || { echo '::error::apksigner nao encontrado'; exit 1; }
           "$APKSIGNER" verify --verbose --print-certs "$APK"
-          echo 'Compare signer SHA-256 with the APK currently installed before installing.'
-      - name: Upload signed Release APK
+          echo 'Comparar SHA-256 com APK instalada ANTES de instalar.'
+      - name: Disponibilizar APK Release
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
