@@ -69,14 +69,14 @@ jobs:
         run: npx cap add android
 
       - name: Configurar Firebase Android
+        shell: bash
         env:
           GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
-        shell: bash
         run: |
           set -euo pipefail
 
           if [ -z "$GOOGLE_SERVICES_JSON_B64" ]; then
-            echo "Falta GOOGLE_SERVICES_JSON_B64" >&2
+            echo "::error::Falta GOOGLE_SERVICES_JSON_B64"
             exit 1
           fi
 
@@ -163,6 +163,8 @@ jobs:
         run: |
           set -euo pipefail
 
+          echo "A verificar os Secrets Android..."
+
           for nome in \
             RJP_KEYSTORE_B64 \
             RJP_KEYSTORE_PASSWORD \
@@ -170,20 +172,39 @@ jobs:
             RJP_KEY_ALIAS
           do
             if [ -z "${!nome:-}" ]; then
-              echo "Falta o Secret: $nome" >&2
+              echo "::error::Falta o Secret: $nome"
               exit 1
             fi
           done
 
-          printf '%s' "$RJP_KEYSTORE_B64" \
-            | base64 --decode \
-            > android/app/rjp-release.jks
+          echo "Os quatro Secrets estao definidos."
 
-          keytool -list \
+          echo "A reconstruir o ficheiro JKS..."
+
+          if ! printf '%s' "$RJP_KEYSTORE_B64" \
+            | base64 --decode > android/app/rjp-release.jks
+          then
+            echo "::error::Base64 invalido no Secret RJP_KEYSTORE_B64"
+            exit 1
+          fi
+
+          if [ ! -s android/app/rjp-release.jks ]; then
+            echo "::error::O ficheiro JKS esta vazio"
+            exit 1
+          fi
+
+          echo "A verificar a chave Android..."
+
+          if ! keytool -list \
             -keystore android/app/rjp-release.jks \
             -storepass "$RJP_KEYSTORE_PASSWORD" \
-            -alias "$RJP_KEY_ALIAS" \
-            > /dev/null
+            -alias "$RJP_KEY_ALIAS" > /dev/null 2>&1
+          then
+            echo "::error::Falha na validacao da chave JKS. Verifica a palavra-passe, o alias e o ficheiro."
+            exit 1
+          fi
+
+          echo "Chave JKS validada com sucesso."
 
           python3 - <<'PYSIGN'
           from pathlib import Path
@@ -223,6 +244,8 @@ jobs:
           p.write_text(s)
           PYSIGN
 
+          echo "Assinatura Gradle configurada."
+
       - name: Compilar APK Release assinada
         if: github.event_name != 'pull_request'
         working-directory: android
@@ -242,14 +265,22 @@ jobs:
 
           APK="android/app/build/outputs/apk/release/app-release.apk"
 
-          test -f "$APK"
+          if [ ! -f "$APK" ]; then
+            echo "::error::APK Release nao encontrada"
+            exit 1
+          fi
 
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" \
             -name apksigner -type f | sort -V | tail -1)
 
-          test -n "$APKSIGNER"
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::Ferramenta apksigner nao encontrada"
+            exit 1
+          fi
 
           "$APKSIGNER" verify --verbose "$APK"
+
+          echo "APK assinada e verificada com sucesso."
 
       - name: Disponibilizar APK assinada
         if: github.event_name != 'pull_request'
