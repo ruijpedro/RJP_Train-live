@@ -1,0 +1,34 @@
+name: Publicar OTA de teste V2.12.1
+on:
+  push:
+    branches: [test/ota-v2-12-1]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  ota:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar e compilar
+        env:
+          VITE_API_URL: ${{ vars.RJP_API_URL }}
+          VITE_OTA_MANIFEST_URL: ${{ vars.VITE_OTA_MANIFEST_URL }}
+        run: |
+          npm install
+          npm run build
+      - name: Criar pacote OTA com dist na raiz
+        run: |
+          cd dist
+          zip -qr ../rjp-train-live-ota-v2.12.1.zip .
+          cd ..
+          unzip -l rjp-train-live-ota-v2.12.1.zip | grep -q 'index.html'
+          sha256sum rjp-train-live-ota-v2.12.1.zip
+      - name: Publicar GitHub Release de teste
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ota-v2.12.1 rjp-train-live-ota-v2.12.1.zip --target "$GITHUB_SHA" --title "RJP Train Live OTA V2.12.1 (teste)" --notes "Pacote Web OTA para a APK V2.12; sem alterações nativas." --prerelease
