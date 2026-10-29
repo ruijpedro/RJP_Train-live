@@ -5,6 +5,14 @@ import {CapacitorUpdater} from '@capgo/capacitor-updater';
 const URL=(import.meta.env.VITE_OTA_MANIFEST_URL||'https://raw.githubusercontent.com/ruijpedro/RJP_Train-live/main/ota/manifest.json').trim();
 const APP='pt.rjp.trainlive';
 const VERSION='2.12.0';
+function isAllowedOtaUrl(value){
+ try {
+  const u=new URL(value);
+  return u.protocol==='https:'&&!u.username&&!u.password&&
+   ['github.com','objects.githubusercontent.com','rjp-train-live-ota.rjpedro.workers.dev'].includes(u.hostname)&&
+   (u.hostname!=='rjp-train-live-ota.rjpedro.workers.dev'||u.pathname==='/ota/v2.12.1.zip');
+ } catch {return false}
+}
 function parts(s){return /^\d+\.\d+\.\d+$/.test(s||'')?s.split('.').map(Number):null}
 function isNewer(candidate,current){
  const a=parts(candidate),b=parts(current);
@@ -24,12 +32,12 @@ export async function checkOtaUpdate(){
  if(m.appId!==APP||!parts(m.version))throw Error('Manifesto OTA inválido.');
  if(!isNewer(m.version,VERSION))return null;
  if(!/^[a-f0-9]{64}$/i.test(m.checksum||''))throw Error('Checksum SHA-256 OTA em falta ou inválida.');
- if(typeof m.url!=='string'||!/^https:\/\/(github\.com|objects\.githubusercontent\.com|rjp-train-live-ota\.rjpedro\.workers\.dev)\//.test(m.url))throw Error('URL OTA inválido.');
+ if(!isAllowedOtaUrl(m.url))throw Error('URL OTA inválido: '+String(m.url));
  return {version:m.version,url:m.url,checksum:m.checksum};
 }
 export async function installOtaUpdate(m){
  if(!Capacitor.isNativePlatform())throw Error('Apenas Android.');
- if(!m||!isNewer(m.version,VERSION)||!/^https:\/\/(github\.com|objects\.githubusercontent\.com|rjp-train-live-ota\.rjpedro\.workers\.dev)\//.test(m.url||''))throw Error('Pacote OTA inválido.');
+ if(!m||!isNewer(m.version,VERSION)||!isAllowedOtaUrl(m.url))throw Error('Pacote OTA inválido.');
  if(!/^[a-f0-9]{64}$/i.test(m.checksum||''))throw Error('Checksum SHA-256 OTA inválida.');
  let bundle;
  // Sonda leve na WebView: permite distinguir falha de rede/HTTP de falha no plugin nativo.
