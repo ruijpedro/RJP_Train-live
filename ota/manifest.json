@@ -1,6 +1,6 @@
 {
   "appId": "pt.rjp.trainlive",
   "version": "2.12.1",
-  "url": "https://github.com/ruijpedro/RJP_Train-live/releases/download/ota-v2.12.1/rjp-train-live-ota-v2.12.1.zip",
+  "url": "https://rjp-train-live-ota.rjpedro.workers.dev/ota/v2.12.1.zip",
   "notes": "Teste OTA: indicador visual V2.12.1, sem alterações nativas ou de notificações."
 }
