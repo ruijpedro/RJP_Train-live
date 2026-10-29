@@ -72,3 +72,10 @@ main{position:relative}
 .alertsHeading{display:flex;align-items:center;justify-content:space-between}.alertsHeading h2{margin:0}.alertsHeading button{background:transparent;font-size:24px}
 .alertsPanel p{font-size:13px;color:#c3d2e1;line-height:1.5}.alertsForm{display:grid;grid-template-columns:1fr 1fr;gap:10px}.alertsForm label{font-size:12px;display:grid;gap:5px;color:#d9e7f5}.alertsForm input,.alertsForm select{width:100%;min-width:0;border:1px solid #46647e;border-radius:8px;background:#071827;color:white;padding:10px;font-size:16px}.alertsForm button{cursor:pointer}.alertsForm .secondary{background:#334b65}.alertRules{margin-top:14px}.alertRule{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #304c66;padding:9px 0}.alertRule small{display:block;margin-top:4px}.alertRule button{background:#4b3341;cursor:pointer}
 @media(max-width:750px){.alertsPanel{top:max(70px,calc(env(safe-area-inset-top,0px) + 60px));max-height:calc(100dvh - 90px)}.alertsForm{grid-template-columns:1fr}nav .alertsButton{width:100%;min-height:44px}nav{flex-wrap:wrap}nav input{flex:1 1 100%}nav .refresh{flex:1 1 48%}nav .alertsButton{flex:1 1 48%;width:auto}}
+
+/* V2.9.2: ETA is display-only; no changes to push/alerts. */
+.etaSection{margin:14px 0;padding:12px;background:#102b40;border:1px solid #3d627b;border-radius:10px}
+.etaSection h3{margin:0 0 5px;font-size:16px}.etaSection .etaNote{font-size:12px;color:#b9cbd9}
+.etaStops{max-height:230px;overflow-y:auto;display:grid;gap:6px;margin-top:10px}
+.etaStop{display:grid;grid-template-columns:minmax(100px,1fr) auto;gap:3px 12px;padding:9px;background:#0a1d2e;border-radius:8px;font-size:12px}
+.etaStop b{grid-row:span 2}.etaStop strong{color:#9be4ff}.etaStop small{grid-column:1/-1;color:#9db6c9}
