@@ -23,12 +23,12 @@ export async function checkOtaUpdate(){
  const m=await r.json();
  if(m.appId!==APP||!parts(m.version))throw Error('Manifesto OTA inválido.');
  if(!isNewer(m.version,VERSION))return null;
- if(typeof m.url!=='string'||!/^https:\/\/(github\.com|objects\.githubusercontent\.com)\//.test(m.url))throw Error('URL OTA inválido.');
+ if(typeof m.url!=='string'||!/^https:\/\/(github\.com|objects\.githubusercontent\.com|rjp-train-live-ota\.rjpedro\.workers\.dev)\//.test(m.url))throw Error('URL OTA inválido.');
  return {version:m.version,url:m.url};
 }
 export async function installOtaUpdate(m){
  if(!Capacitor.isNativePlatform())throw Error('Apenas Android.');
- if(!m||!isNewer(m.version,VERSION)||!/^https:\/\/(github\.com|objects\.githubusercontent\.com)\//.test(m.url||''))throw Error('Pacote OTA inválido.');
+ if(!m||!isNewer(m.version,VERSION)||!/^https:\/\/(github\.com|objects\.githubusercontent\.com|rjp-train-live-ota\.rjpedro\.workers\.dev)\//.test(m.url||''))throw Error('Pacote OTA inválido.');
  let bundle;
  try {
   bundle=await CapacitorUpdater.download({url:m.url,version:m.version});
