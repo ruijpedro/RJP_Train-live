@@ -30,12 +30,26 @@ export async function installOtaUpdate(m){
  if(!Capacitor.isNativePlatform())throw Error('Apenas Android.');
  if(!m||!isNewer(m.version,VERSION)||!/^https:\/\/(github\.com|objects\.githubusercontent\.com|rjp-train-live-ota\.rjpedro\.workers\.dev)\//.test(m.url||''))throw Error('Pacote OTA inválido.');
  let bundle;
+ // Sonda leve na WebView: permite distinguir falha de rede/HTTP de falha no plugin nativo.
+ let preflight='não executado';
+ try {
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),12000);
+  try {
+   const r=await fetch(m.url,{method:'GET',headers:{Range:'bytes=0-99'},cache:'no-store',signal:ctrl.signal});
+   const bytes=(await r.arrayBuffer()).byteLength;
+   preflight=`WebView HTTP ${r.status}, bytes=${bytes}, tipo=${r.headers.get('content-type')||'?'}, range=${r.headers.get('content-range')||'nenhum'}`;
+  } finally {clearTimeout(timer)}
+ } catch(e) {
+  preflight='WebView '+(e?.name||'erro')+': '+(e?.message||String(e));
+ }
+ console.info('[RJP OTA] preflight',preflight);
  try {
   bundle=await CapacitorUpdater.download({url:m.url,version:m.version});
  } catch(e) {
   const detail=[e?.message,e?.code,e?.status,e?.statusCode].filter(v=>v!==undefined&&v!==null).join(' | ');
   console.error('[RJP OTA] native download failed', {version:m.version,url:m.url,error:e});
-  throw Error('Falha na descarga nativa Capgo: '+(detail||String(e)));
+  throw Error('Falha na descarga nativa Capgo: '+(detail||String(e))+' | Teste HTTP: '+preflight);
  }
  if(!bundle?.id)throw Error('Capgo não devolveu um identificador de pacote.');
  try {
