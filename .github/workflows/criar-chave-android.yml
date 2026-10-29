@@ -1,1 +1,46 @@
 
+name: Criar chave Android RJP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gerar-chave:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preparar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Gerar chave de assinatura
+        shell: bash
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.RJP_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.RJP_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_PASSWORD" || { echo "Falta RJP_KEYSTORE_PASSWORD"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "Falta RJP_KEY_PASSWORD"; exit 1; }
+
+          keytool -genkeypair -v \
+            -keystore rjp-train-live-release.jks \
+            -alias rjptrainlive \
+            -keyalg RSA \
+            -keysize 3072 \
+            -validity 10000 \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            -dname "CN=RJP Train Live, O=RJP, C=PT"
+
+      - name: Disponibilizar chave para arquivo privado
+        uses: actions/upload-artifact@v4
+        with:
+          name: rjp-train-live-keystore
+          path: rjp-train-live-release.jks
+          retention-days: 1
+
