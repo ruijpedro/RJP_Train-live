@@ -45,3 +45,21 @@ export async function installOtaUpdate(m){
   throw Error('Descarga concluída mas ativação falhou: '+(e?.message||String(e)));
  }
 }
+
+export async function diagnoseOta(){
+ const lines=['RJP Train Live · Diagnóstico OTA',new Date().toISOString(),'Plataforma: '+Capacitor.getPlatform()];
+ const probe=async(label,url,method='GET')=>{
+  const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),15000);
+  try{
+   const r=await fetch(url,{method,cache:'no-store',signal:ctrl.signal});
+   lines.push(label+': HTTP '+r.status+' | tipo='+ (r.headers.get('content-type')||'?')+' | tamanho='+ (r.headers.get('content-length')||'?')+' | URL final='+r.url);
+   if(label==='Manifesto'&&r.ok){const m=await r.json();lines.push('Versão remota: '+String(m.version||'?'));lines.push('ZIP: '+String(m.url||'?'));return m.url;}
+  }catch(e){lines.push(label+': '+(e?.name||'Erro')+' '+(e?.message||String(e)));}
+  finally{clearTimeout(timer);}
+  return null;
+ };
+ const zip=await probe('Manifesto',URL);
+ if(zip)await probe('ZIP HTTP HEAD',zip,'HEAD');
+ lines.push('Nota: HEAD testa acesso pela WebView, não substitui a descarga nativa Capgo.');
+ return lines.join('\n');
+}
