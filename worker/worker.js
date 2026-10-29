@@ -43,7 +43,12 @@ function timeToMs(clock,now){
 }
 const lisbonDay = now => new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Lisbon',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
 const lisbonWeekday = now => {const wd=new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Lisbon',weekday:'short'}).format(now);return ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].indexOf(wd)};
-function activeDay(rule,now){return !Array.isArray(rule.days)||rule.days.includes(lisbonWeekday(now))}
+function activeDay(rule,now){
+ const date=lisbonDay(now),kind=rule.scheduleType||'weekly';
+ if(kind==='date')return rule.date===date;
+ if(kind==='monthly'){const [year,,day]=date.split('-').map(Number);return Number(rule.monthDay)===day&&(!rule.year||Number(rule.year)===year)}
+ return !Array.isArray(rule.days)||rule.days.includes(lisbonWeekday(now));
+}
 function trainNumber(raw){return String(raw.data?.status?.trainNumber??raw.fixed?.trainNumber??raw.db?.trainNumber??raw.train_id??'')}
 function matches(raw,rule,now){
  const fixed=raw.fixed||{},live=raw.data?.status||{},db=raw.db||{};
@@ -104,7 +109,7 @@ async function check(env){
  for(const d of devices.results){
   let rules;try{rules=JSON.parse(d.rules)}catch{continue}
   for(const rule of rules){
-   if(!rule.enabled)continue;
+   if(!rule.enabled||!activeDay(rule,now))continue;
    for(const raw of trains){
     const candidates=matches(raw,rule,now);
     if(rule.notifyOnArrival===true&&rule.event!=='departure'&&activeDay(rule,now)){
@@ -152,8 +157,8 @@ export default {
    if(!old)return json({error:'Dispositivo não registado'},404);
    if(u.pathname.endsWith('/test')){await env.DB.prepare("INSERT INTO push_test_queue(device_id,due_at) VALUES(?,datetime('now','+60 seconds')) ON CONFLICT(device_id) DO UPDATE SET due_at=excluded.due_at").bind(b.id).run();return json({ok:true,delay_seconds:60})}
    if(!Array.isArray(b.rules)||b.rules.length>30)return json({error:'Máximo de 30 alertas'},400);
-   const rules=b.rules.map(r=>({id:String(r.id||'').slice(0,80),scope:r.scope,target:String(r.target||'').slice(0,120),station:String(r.station||'').slice(0,120),event:r.event,lead:Number(r.lead),enabled:!!r.enabled,days:Array.isArray(r.days)?r.days.map(Number):[0,1,2,3,4,5,6],notifyBefore:r.notifyBefore!==false,notifyOnArrival:r.notifyOnArrival===true}));
-   if(rules.some(r=>!r.id||!['station','train','combined'].includes(r.scope)||(r.scope==='combined'&&!r.station)||!r.target||!['arrival','departure','both'].includes(r.event)||!Number.isInteger(r.lead)||r.lead<0||r.lead>1440||!Array.isArray(r.days)||r.days.length===0||r.days.some(d=>!Number.isInteger(d)||d<0||d>6)||(!r.notifyBefore&&!r.notifyOnArrival)))return json({error:'Regra inválida'},400);
+   const rules=b.rules.map(r=>({id:String(r.id||'').slice(0,80),scope:r.scope,target:String(r.target||'').slice(0,120),station:String(r.station||'').slice(0,120),event:r.event,lead:Number(r.lead),enabled:!!r.enabled,days:Array.isArray(r.days)?r.days.map(Number):[0,1,2,3,4,5,6],notifyBefore:r.notifyBefore!==false,notifyOnArrival:r.notifyOnArrival===true,scheduleType:r.scheduleType||'weekly',date:r.scheduleType==='date'?r.date:null,monthDay:r.scheduleType==='monthly'?Number(r.monthDay):null,year:r.scheduleType==='monthly'&&r.year?Number(r.year):null}));
+   if(rules.some(r=>!r.id||!['station','train','combined'].includes(r.scope)||(r.scope==='combined'&&!r.station)||!r.target||!['arrival','departure','both'].includes(r.event)||!Number.isInteger(r.lead)||r.lead<0||r.lead>1440||!Array.isArray(r.days)||r.days.length===0||r.days.some(d=>!Number.isInteger(d)||d<0||d>6)||(!['weekly','date','monthly'].includes(r.scheduleType))||(r.scheduleType==='weekly'&&r.days.length===0)||(r.scheduleType==='date'&&(!/^\d{4}-\d{2}-\d{2}$/.test(r.date)||Number.isNaN(Date.parse(r.date))||new Date(r.date).toISOString().slice(0,10)!==r.date))||(r.scheduleType==='monthly'&&(!Number.isInteger(r.monthDay)||r.monthDay<1||r.monthDay>31||(r.year!==null&&(!Number.isInteger(r.year)||r.year<2020||r.year>2100))))||(!r.notifyBefore&&!r.notifyOnArrival)))return json({error:'Regra inválida'},400);
    await env.DB.prepare('UPDATE push_subscriptions SET fcm_token=?,rules=?,updated_at=CURRENT_TIMESTAMP WHERE device_id=?').bind(b.token,JSON.stringify(rules),b.id).run();return json({ok:true,count:rules.length});
   }
   return json({error:'Not found'},404);

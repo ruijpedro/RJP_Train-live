@@ -25,3 +25,21 @@ export function stopEta(stop,train){
  return {scheduled:scheduled===null?null:formatMinutes(scheduled),eta:reported!==null?formatMinutes(reported):(scheduled!==null&&delay!==null?formatMinutes(scheduled+delay):null),delay,source:reported!==null?'fonte':scheduled!==null&&delay!==null?'calculado':'indisponível'};
 }
 export function trainStopsEta(train){return (Array.isArray(train?.trainStops)?train.trainStops:[]).map((stop,index)=>({key:String(stop?.station?.code??index)+'-'+index,station:stop?.station?.designation??stop?.station?.code??'Estação',...stopEta(stop,train)}));}
+
+// Presentation helpers: no mutation of alert rules, Firebase tokens or Worker state.
+export function minutesUntil(hhmm, now=new Date()){
+ const target=clockMinutes(hhmm);
+ if(target===null)return null;
+ const current=now.getHours()*60+now.getMinutes()+now.getSeconds()/60;
+ const delta=target-current;
+ // A clock-only timetable cannot identify the service day reliably.
+ // Only present a countdown for the near future, including midnight rollover.
+ const candidate=delta < -720 ? delta+1440 : delta;
+ return candidate>=0&&candidate<=360?Math.ceil(candidate):null;
+}
+export function etaProgress(train){
+ const stops=trainStopsEta(train);
+ const last=String(train?.lastStation??'').trim().toLocaleLowerCase('pt-PT');
+ const index=stops.findIndex(s=>s.station.toLocaleLowerCase('pt-PT')===last);
+ return {stops,lastIndex:index,nextIndex:index>=0&&index+1<stops.length?index+1:null};
+}

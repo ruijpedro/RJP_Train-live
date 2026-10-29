@@ -1,0 +1,9 @@
+RJP Train Live V2.11 — datas nos alertas
+
+1. Faça backup do projeto anterior e mantenha a APK instalada.
+2. Compile a APK com o mesmo applicationId e assinatura, instalando por cima da anterior.
+3. IMPORTANTE: para as datas funcionarem com a APK fechada, publique worker/worker.js na Cloudflare, mantendo o binding D1 DB, o Secret FIREBASE_SERVICE_ACCOUNT e o Cron existente. Não apague a base de dados nem rode a chave Firebase.
+4. Confirme o alerta antigo do comboio 802 e execute o teste push remoto de 60 segundos.
+5. Crie um alerta de data específica ou dia do mês e confirme que o servidor aceita a sincronização.
+
+Sem alterar a Cloudflare, as novas datas não são garantidas para notificações remotas.

@@ -79,3 +79,6 @@ main{position:relative}
 .etaStops{max-height:230px;overflow-y:auto;display:grid;gap:6px;margin-top:10px}
 .etaStop{display:grid;grid-template-columns:minmax(100px,1fr) auto;gap:3px 12px;padding:9px;background:#0a1d2e;border-radius:8px;font-size:12px}
 .etaStop b{grid-row:span 2}.etaStop strong{color:#9be4ff}.etaStop small{grid-column:1/-1;color:#9db6c9}
+
+/* V2.10: route status and ETA countdown, display only. */
+.etaCountdown{color:#f4d68a;font-weight:700}.etaStop{align-items:center}.etaStop small{grid-column:1/-1}

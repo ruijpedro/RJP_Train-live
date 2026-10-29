@@ -1,3 +1,4 @@
+import {activeSchedule} from './schedule.js';
 export const ALERTS_KEY='rjp_train_alerts_v26';
 export const ALERT_LOG_KEY='rjp_train_alert_log_v26';
 export function clean(s){return String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()}
@@ -10,7 +11,7 @@ export function alertCandidates(trains,alerts,now=new Date()){
  const result=[];
  for(const rule of alerts){
   if(!rule.enabled||!rule.target?.trim()||rule.notifyBefore===false)continue;
-  const weekday=(now.getDay()+6)%7;if(Array.isArray(rule.days)&&!rule.days.includes(weekday))continue;
+  if(!activeSchedule(rule,now))continue;
   for(const train of trains){
    const id=String(train.trainNumber??train.id??'');
    if(['train','combined'].includes(rule.scope)&&clean(id)!==clean(rule.target))continue;
