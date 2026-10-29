@@ -1,0 +1,7 @@
+name = "rjp-train-live-ota"
+main = "cloudflare-worker.js"
+compatibility_date = "2026-10-29"
+
+[[r2_buckets]]
+binding = "OTA_BUCKET"
+bucket_name = "rjp-train-live-ota"
