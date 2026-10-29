@@ -1,3 +1,67 @@
+name: RJP Train Live - Web + Android APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias
+        run: npm install
+      - name: Compilar WebApp
+        env:
+          VITE_API_URL: ${{ vars.RJP_API_URL }}
+          VITE_OTA_MANIFEST_URL: ${{ vars.VITE_OTA_MANIFEST_URL }}
+        run: npm run build
+      - name: Disponibilizar WebApp
+        uses: actions/upload-artifact@v4
+        with:
+          name: RJP-Train-Live-Web-V2.12
+          path: dist/
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Preparar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Instalar dependencias
+        run: npm install
+      - name: Compilar WebApp
+        env:
+          VITE_API_URL: ${{ vars.RJP_API_URL }}
+          VITE_OTA_MANIFEST_URL: ${{ vars.VITE_OTA_MANIFEST_URL }}
+        run: npm run build
+      - name: Criar projeto Android
+        run: npx cap add android
+      - name: Configurar Firebase Android
+        shell: bash
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+        run: |
           set -euo pipefail
           test -n "$GOOGLE_SERVICES_JSON_B64" || { echo '::error::Falta GOOGLE_SERVICES_JSON_B64'; exit 1; }
           printf '%s' "$GOOGLE_SERVICES_JSON_B64" | base64 --decode > android/app/google-services.json
