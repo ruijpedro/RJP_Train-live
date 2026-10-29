@@ -29,6 +29,19 @@ export async function checkOtaUpdate(){
 export async function installOtaUpdate(m){
  if(!Capacitor.isNativePlatform())throw Error('Apenas Android.');
  if(!m||!isNewer(m.version,VERSION)||!/^https:\/\/(github\.com|objects\.githubusercontent\.com)\//.test(m.url||''))throw Error('Pacote OTA inválido.');
- const bundle=await CapacitorUpdater.download({url:m.url,version:m.version});
- await CapacitorUpdater.set({id:bundle.id});
+ let bundle;
+ try {
+  bundle=await CapacitorUpdater.download({url:m.url,version:m.version});
+ } catch(e) {
+  const detail=[e?.message,e?.code,e?.status,e?.statusCode].filter(v=>v!==undefined&&v!==null).join(' | ');
+  console.error('[RJP OTA] native download failed', {version:m.version,url:m.url,error:e});
+  throw Error('Falha na descarga nativa Capgo: '+(detail||String(e)));
+ }
+ if(!bundle?.id)throw Error('Capgo não devolveu um identificador de pacote.');
+ try {
+  await CapacitorUpdater.set({id:bundle.id});
+ } catch(e) {
+  console.error('[RJP OTA] bundle activation failed',e);
+  throw Error('Descarga concluída mas ativação falhou: '+(e?.message||String(e)));
+ }
 }
