@@ -1,11 +1,10 @@
-
 name: RJP Train Live - Web + Android APK
 
 on:
   push:
-    branches: [main, master]
+    branches: [ main, master ]
   pull_request:
-    branches: [main, master]
+    branches: [ main, master ]
   workflow_dispatch:
 
 permissions:
@@ -14,278 +13,116 @@ permissions:
 jobs:
   web:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Preparar Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Instalar dependencias
+      - name: Install dependencies
         run: npm install
-
-      - name: Compilar WebApp
+      - name: Build WebApp
         env:
           VITE_API_URL: ${{ vars.RJP_API_URL }}
+          VITE_OTA_MANIFEST_URL: ${{ vars.VITE_OTA_MANIFEST_URL }}
         run: npm run build
-
-      - name: Disponibilizar WebApp
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: RJP-Train-Live-Web
+          name: RJP-Train-Live-Web-V2.7.0
           path: dist/
           if-no-files-found: error
 
   android:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Preparar Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Preparar Java 21
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
-      - name: Instalar dependencias
+      - name: Install dependencies
         run: npm install
 
-      - name: Compilar WebApp
+      - name: Build WebApp
         env:
           VITE_API_URL: ${{ vars.RJP_API_URL }}
+          VITE_OTA_MANIFEST_URL: ${{ vars.VITE_OTA_MANIFEST_URL }}
         run: npm run build
 
-      - name: Criar projeto Android
+      - name: Create Android project
         run: npx cap add android
 
-      - name: Configurar Firebase Android
-        shell: bash
+      - name: Configure Firebase for Android push
         env:
           GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
         run: |
-          set -euo pipefail
-
           if [ -z "$GOOGLE_SERVICES_JSON_B64" ]; then
-            echo "::error::Falta GOOGLE_SERVICES_JSON_B64"
+            echo "Firebase não configurado: define GOOGLE_SERVICES_JSON_B64 no GitHub Secrets" >&2
             exit 1
           fi
-
-          printf '%s' "$GOOGLE_SERVICES_JSON_B64" \
-            | base64 --decode \
-            > android/app/google-services.json
-
+          echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > android/app/google-services.json
           python3 - <<'PYGRADLE'
           from pathlib import Path
-
-          top = Path('android/build.gradle')
-          s = top.read_text()
-
-          if 'com.google.gms:google-services' not in s:
-              s = s.replace(
-                  'dependencies {',
-                  "dependencies {\n        classpath 'com.google.gms:google-services:4.4.2'",
-                  1
-              )
-
+          top=Path('android/build.gradle')
+          s=top.read_text()
+          if "com.google.gms:google-services" not in s:
+              s=s.replace('dependencies {', "dependencies {\n        classpath 'com.google.gms:google-services:4.4.2'", 1)
           top.write_text(s)
-
-          app = Path('android/app/build.gradle')
-          s = app.read_text()
-
+          app=Path('android/app/build.gradle')
+          s=app.read_text()
           if "apply plugin: 'com.google.gms.google-services'" not in s:
               s += "\napply plugin: 'com.google.gms.google-services'\n"
-
           app.write_text(s)
           PYGRADLE
 
-      - name: Sincronizar Capacitor
+      - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Aplicar icone RJP Train Live
+      - name: Apply RJP Train Live icon safely
         shell: bash
         run: |
-          set -euo pipefail
-
+          set -e
           SRC="native-icons/android/res"
           DST="android/app/src/main/res"
 
+          # Keep Capacitor's resources and overlay IconKitchen resources.
           if [ -d "$SRC" ]; then
             cp -R "$SRC"/. "$DST"/
           fi
 
+          # Use the guaranteed main launcher resource also for roundIcon.
           MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's#android:roundIcon="@mipmap/ic_launcher_round"#android:roundIcon="@mipmap/ic_launcher"#g' "$MANIFEST"
 
-          sed -i \
-            's#android:roundIcon="@mipmap/ic_launcher_round"#android:roundIcon="@mipmap/ic_launcher"#g' \
-            "$MANIFEST"
-
-          echo "Recursos de icones:"
+          echo "Launcher references:"
+          grep -n "android:icon\\|android:roundIcon" "$MANIFEST" || true
+          echo "Launcher resources:"
           find "$DST" -type f -name 'ic_launcher*' -print | sort || true
 
-      - name: Garantir permissao de notificacoes
+      - name: Ensure Android notification permission
         run: |
           python3 - <<'PYANDROID'
           from pathlib import Path
-
-          p = Path('android/app/src/main/AndroidManifest.xml')
-          s = p.read_text()
-
-          perm = '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />'
-
+          p=Path('android/app/src/main/AndroidManifest.xml')
+          s=p.read_text()
+          perm='<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />'
           if perm not in s:
-              s = s.replace(
-                  '<application',
-                  perm + '\n    <application',
-                  1
-              )
-
+              s=s.replace('<application',perm+'\n    <application',1)
           p.write_text(s)
           PYANDROID
 
-      - name: Configurar assinatura permanente
-        if: github.event_name != 'pull_request'
-        shell: bash
-        env:
-          RJP_KEYSTORE_B64: ${{ secrets.RJP_KEYSTORE_B64 }}
-          RJP_KEYSTORE_PASSWORD: ${{ secrets.RJP_KEYSTORE_PASSWORD }}
-          RJP_KEY_PASSWORD: ${{ secrets.RJP_KEY_PASSWORD }}
-          RJP_KEY_ALIAS: ${{ secrets.RJP_KEY_ALIAS }}
-        run: |
-          set -euo pipefail
-
-          echo "A verificar os Secrets Android..."
-
-          for nome in \
-            RJP_KEYSTORE_B64 \
-            RJP_KEYSTORE_PASSWORD \
-            RJP_KEY_PASSWORD \
-            RJP_KEY_ALIAS
-          do
-            if [ -z "${!nome:-}" ]; then
-              echo "::error::Falta o Secret: $nome"
-              exit 1
-            fi
-          done
-
-          echo "Os quatro Secrets estao definidos."
-
-          echo "A reconstruir o ficheiro JKS..."
-
-          if ! printf '%s' "$RJP_KEYSTORE_B64" \
-            | base64 --decode > android/app/rjp-release.jks
-          then
-            echo "::error::Base64 invalido no Secret RJP_KEYSTORE_B64"
-            exit 1
-          fi
-
-          if [ ! -s android/app/rjp-release.jks ]; then
-            echo "::error::O ficheiro JKS esta vazio"
-            exit 1
-          fi
-
-          echo "A verificar a chave Android..."
-
-          if ! keytool -list \
-            -keystore android/app/rjp-release.jks \
-            -storepass "$RJP_KEYSTORE_PASSWORD" \
-            -alias "$RJP_KEY_ALIAS" > /dev/null 2>&1
-          then
-            echo "::error::Falha na validacao da chave JKS. Verifica a palavra-passe, o alias e o ficheiro."
-            exit 1
-          fi
-
-          echo "Chave JKS validada com sucesso."
-
-          python3 - <<'PYSIGN'
-          from pathlib import Path
-
-          p = Path('android/app/build.gradle')
-          s = p.read_text()
-
-          if 'buildTypes {' not in s or 'release {' not in s:
-              raise RuntimeError(
-                  'Configuracao Gradle inesperada'
-              )
-
-          assinatura = """
-              signingConfigs {
-                  rjpRelease {
-                      storeFile file('rjp-release.jks')
-                      storePassword System.getenv('RJP_KEYSTORE_PASSWORD')
-                      keyAlias System.getenv('RJP_KEY_ALIAS')
-                      keyPassword System.getenv('RJP_KEY_PASSWORD')
-                  }
-              }
-              buildTypes {
-          """
-
-          s = s.replace(
-              'buildTypes {',
-              assinatura,
-              1
-          )
-
-          s = s.replace(
-              'release {',
-              'release {\n            signingConfig signingConfigs.rjpRelease',
-              1
-          )
-
-          p.write_text(s)
-          PYSIGN
-
-          echo "Assinatura Gradle configurada."
-
-      - name: Compilar APK Release assinada
-        if: github.event_name != 'pull_request'
+      - name: Build APK
         working-directory: android
-        env:
-          RJP_KEYSTORE_PASSWORD: ${{ secrets.RJP_KEYSTORE_PASSWORD }}
-          RJP_KEY_PASSWORD: ${{ secrets.RJP_KEY_PASSWORD }}
-          RJP_KEY_ALIAS: ${{ secrets.RJP_KEY_ALIAS }}
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
+        run: chmod +x gradlew && ./gradlew assembleDebug
 
-      - name: Verificar assinatura APK
-        if: github.event_name != 'pull_request'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          APK="android/app/build/outputs/apk/release/app-release.apk"
-
-          if [ ! -f "$APK" ]; then
-            echo "::error::APK Release nao encontrada"
-            exit 1
-          fi
-
-          APKSIGNER=$(find "$ANDROID_HOME/build-tools" \
-            -name apksigner -type f | sort -V | tail -1)
-
-          if [ -z "$APKSIGNER" ]; then
-            echo "::error::Ferramenta apksigner nao encontrada"
-            exit 1
-          fi
-
-          "$APKSIGNER" verify --verbose "$APK"
-
-          echo "APK assinada e verificada com sucesso."
-
-      - name: Disponibilizar APK assinada
-        if: github.event_name != 'pull_request'
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: RJP-Train-Live-APK-Assinada
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: RJP-Train-Live-V2.7.0-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
