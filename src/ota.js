@@ -1,4 +1,4 @@
-import {Capacitor} from '@capacitor/core';
+import {Capacitor,CapacitorHttp} from '@capacitor/core';
 import {CapacitorUpdater} from '@capgo/capacitor-updater';
 
 // Manual pilot. Existing push, Firebase, D1 and alert storage are untouched.
@@ -44,12 +44,26 @@ export async function installOtaUpdate(m){
   preflight='WebView '+(e?.name||'erro')+': '+(e?.message||String(e));
  }
  console.info('[RJP OTA] preflight',preflight);
+ let nativeProbe='não executado';
+ try {
+  const result=await CapacitorHttp.request({
+   url:m.url,
+   method:'HEAD',
+   connectTimeout:12000,
+   readTimeout:12000,
+   headers:{'Cache-Control':'no-cache'}
+  });
+  nativeProbe='Android HTTP '+result.status+', tipo='+String(result.headers?.['Content-Type']||result.headers?.['content-type']||'?');
+ } catch(e) {
+  nativeProbe='Android HTTP erro: '+(e?.message||String(e));
+ }
+ console.info('[RJP OTA] native HTTP probe',nativeProbe);
  try {
   bundle=await CapacitorUpdater.download({url:m.url,version:m.version});
  } catch(e) {
   const detail=[e?.message,e?.code,e?.status,e?.statusCode].filter(v=>v!==undefined&&v!==null).join(' | ');
   console.error('[RJP OTA] native download failed', {version:m.version,url:m.url,error:e});
-  throw Error('Falha na descarga nativa Capgo: '+(detail||String(e))+' | Teste HTTP: '+preflight);
+  throw Error('Falha na descarga nativa Capgo: '+(detail||String(e))+' | Teste HTTP: '+preflight+' | Teste Android: '+nativeProbe);
  }
  if(!bundle?.id)throw Error('Capgo não devolveu um identificador de pacote.');
  try {
