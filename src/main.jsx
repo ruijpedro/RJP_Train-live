@@ -6,7 +6,7 @@ import{LocalNotifications}from"@capacitor/local-notifications";
 import{PushNotifications}from"@capacitor/push-notifications";
 import{initPush,savePushRules,pushState,scheduleRemotePushTest}from"./push.js";
 import{trainStopsEta,minutesUntil,etaProgress}from"./eta.js";
-import {checkOtaUpdate,installOtaUpdate,confirmOtaReady,diagnoseOta} from"./ota.js";
+import {checkOtaUpdate,installOtaUpdate,confirmOtaReady} from"./ota.js";
 import L from"leaflet";import"./style.css";
 import{getSavedAlerts,dispatchAlerts,ALERTS_KEY}from"./alerts.js";
 import{scheduleLabel}from"./schedule.js";
@@ -66,7 +66,6 @@ function sendAlert(c){
 }
 
 function App(){
- const [otaReport,setOtaReport]=useState(""),[otaDiagnosing,setOtaDiagnosing]=useState(false);
  const [otaState,setOtaState]=useState(""),[otaCandidate,setOtaCandidate]=useState(null),[otaBusy,setOtaBusy]=useState(false);
  useEffect(()=>{confirmOtaReady().catch(console.warn)},[]);
  async function checkOta(){setOtaBusy(true);try{const candidate=await checkOtaUpdate();setOtaCandidate(candidate);setOtaState(candidate?`Atualização ${candidate.version} disponível.`:"Sem atualização OTA disponível.")}catch(e){setOtaState(`OTA: ${e.message}`)}finally{setOtaBusy(false)}}
@@ -134,7 +133,7 @@ function App(){
 
  let filtered=trains.filter(t=>JSON.stringify(t).toLowerCase().includes(q.toLowerCase()));
  return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2.12</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>Fonte dos dados: <b>WebApp Comboios Live — Rui Costa</b></small></div></header>
- <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button className={loading?"refresh loading":"refresh"} onClick={load} disabled={loading}><span>↻</span>{loading?" A atualizar…":" Atualizar agora"}</button><button className="alertsButton" onClick={()=>setAlertOpen(v=>!v)}>🔔 Alertas ({alerts.length})</button><button onClick={checkOta} disabled={otaBusy}>⬇ Verificar OTA</button>{otaCandidate&&<button onClick={applyOta} disabled={otaBusy}>Instalar {otaCandidate.version}</button>}<button onClick={async()=>{setOtaDiagnosing(true);setOtaReport('A testar manifesto e descarga HTTP…');try{setOtaReport(await diagnoseOta())}catch(e){setOtaReport('Diagnóstico falhou: '+(e?.message||String(e)))}finally{setOtaDiagnosing(false)}}} disabled={otaDiagnosing}>🩺 Diagnóstico OTA</button></nav>{otaState&&<p role="status" className="otaStatus">{otaState}</p>}{otaReport&&<section style={{padding:12,background:'#102237',borderRadius:10,margin:'12px 0',overflowWrap:'anywhere'}}><h3>Diagnóstico OTA</h3><pre style={{whiteSpace:'pre-wrap',fontSize:12}}>{otaReport}</pre><button onClick={async()=>{try{await navigator.clipboard.writeText(otaReport);setOtaState('Relatório copiado.')}catch(e){setOtaState('Não foi possível copiar automaticamente. Seleciona o texto do relatório.')}}}>📋 Copiar relatório</button><button onClick={()=>setOtaReport('')}>Fechar</button></section>}
+ <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button className={loading?"refresh loading":"refresh"} onClick={load} disabled={loading}><span>↻</span>{loading?" A atualizar…":" Atualizar agora"}</button><button className="alertsButton" onClick={()=>setAlertOpen(v=>!v)}>🔔 Alertas ({alerts.length})</button><button onClick={checkOta} disabled={otaBusy}>⬇ Verificar OTA</button>{otaCandidate&&<button onClick={applyOta} disabled={otaBusy}>Instalar {otaCandidate.version}</button>}</nav>{otaState&&<p role="status" className="otaStatus">{otaState}</p>}
  <section className="stats"><div><b>{trains.length}</b><small>comboios recebidos</small></div><div><b>{trains.filter(t=>+(t.delayMinutes??t.delay??0)>0).length}</b><small>com atraso</small></div><div><b>{updated?updated.toLocaleTimeString("pt-PT"):"—"}</b><small>última atualização</small></div></section>
  {alertOpen&&<section className="alertsPanel"><div className="alertsHeading"><h2>🔔 Alertas ferroviários</h2><button onClick={()=>setAlertOpen(false)} aria-label="Fechar alertas">×</button></div>
  <p>Alertas de horários previstos, baseados na WebApp Comboios Live — Rui Costa. Com Firebase e o Worker configurados, os avisos push podem chegar mesmo com a aplicação fechada. Os horários são previstos, não confirmações de circulação.</p>
