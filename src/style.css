@@ -82,3 +82,11 @@ main{position:relative}
 
 /* V2.10: route status and ETA countdown, display only. */
 .etaCountdown{color:#f4d68a;font-weight:700}.etaStop{align-items:center}.etaStop small{grid-column:1/-1}
+
+/* V2.12.3: accessible, centered train information on mobile and desktop. */
+.trainModalBackdrop{position:fixed;inset:0;z-index:2500;display:flex;align-items:center;justify-content:center;padding:calc(16px + env(safe-area-inset-top,0px)) 12px calc(16px + env(safe-area-inset-bottom,0px));background:rgba(3,12,23,.68)}
+.trainModalBackdrop .card{position:relative;left:auto;bottom:auto;top:auto;right:auto;width:min(440px,100%);max-height:100%;overflow-y:auto;overscroll-behavior:contain;padding:20px 16px 16px;background:#102943;border:1px solid #395775;border-radius:14px;box-shadow:0 12px 45px #0009}
+.trainModalBackdrop .card h2{padding-right:42px}
+.trainModalBackdrop .card .trainModalClose{position:sticky;top:0;float:right;display:grid;place-items:center;min-width:44px;min-height:44px;margin:-6px -4px 0 0;padding:0;background:#213d59;color:#fff;font-size:28px;border-radius:10px;cursor:pointer;z-index:2}
+.trainModalBackdrop .card .trainModalClose:focus-visible{outline:2px solid #8bd2ff;outline-offset:2px}
+@media(max-width:750px){.trainModalBackdrop .card{width:min(440px,100%);max-height:100%;padding:16px 14px}}
