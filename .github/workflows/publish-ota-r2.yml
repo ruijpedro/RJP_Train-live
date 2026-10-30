@@ -1,0 +1,131 @@
+name: Publicar OTA no Cloudflare R2
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versão OTA (ex.: 2.12.5), superior à versão atual'
+        required: true
+        type: string
+      confirm_publish:
+        description: 'Escrever PUBLICAR para confirmar a publicação no manifesto oficial'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rjp-train-live-ota-production
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ inputs.confirm_publish == 'PUBLICAR' }}
+    runs-on: ubuntu-latest
+    environment: ota-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validar versão e ficheiros
+        env:
+          OTA_VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          v=os.environ['OTA_VERSION']
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',v), 'Versão inválida'
+          package=json.load(open('package.json'))
+          assert package['version']==v, f'package.json é {package["version"]}, pedido {v}'
+          source=open('src/ota.js').read()
+          assert f"const VERSION='{v}'" in source, 'src/ota.js tem versão diferente'
+          PY
+      - run: npm ci
+      - name: Compilar WebApp
+        env:
+          VITE_API_URL: ${{ vars.RJP_API_URL }}
+          VITE_OTA_MANIFEST_URL: ${{ vars.VITE_OTA_MANIFEST_URL }}
+        run: npm run build
+      - name: Criar pacote e checksum
+        env:
+          OTA_VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os, zipfile, hashlib, json
+          from pathlib import Path
+          v=os.environ['OTA_VERSION']
+          target=Path(f'rjp-train-live-ota-v{v}.zip')
+          with zipfile.ZipFile(target,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+            for f in sorted(Path('dist').rglob('*')):
+              if f.is_file(): z.write(f,f.relative_to('dist'))
+          assert 'index.html' in zipfile.ZipFile(target).namelist()
+          checksum=hashlib.sha256(target.read_bytes()).hexdigest()
+          manifest={'appId':'pt.rjp.trainlive','version':v,'url':f'https://rjp-train-live-ota.rjpedro.workers.dev/ota/v{v}.zip','notes':f'Atualização OTA V{v}','checksum':checksum}
+          Path('ota-manifest-pending.json').write_text(json.dumps(manifest,indent=2)+'\n')
+          print('SHA-256:',checksum)
+          PY
+      - name: Configurar credenciais R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          test -n "$R2_ACCOUNT_ID" && test -n "$R2_ACCESS_KEY_ID" && test -n "$R2_SECRET_ACCESS_KEY"
+          echo "R2_ENDPOINT=https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" >> "$GITHUB_ENV"
+      - name: Publicar ZIP no R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          OTA_VERSION: ${{ inputs.version }}
+        run: |
+          aws s3 cp "rjp-train-live-ota-v${OTA_VERSION}.zip" "s3://rjp-train-live-ota/rjp-train-live-ota-v${OTA_VERSION}.zip" --endpoint-url "$R2_ENDPOINT" --content-type application/zip
+      - name: Confirmar download público e checksum
+        env:
+          OTA_VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json, hashlib, urllib.request
+          m=json.load(open('ota-manifest-pending.json'))
+          req=urllib.request.Request(m['url'],headers={'Cache-Control':'no-cache'})
+          with urllib.request.urlopen(req,timeout=90) as response:
+            assert response.status==200, response.status
+            digest=hashlib.sha256(response.read()).hexdigest()
+          assert digest==m['checksum'], f'Checksum remota divergente: {digest}'
+          print('ZIP público verificado:',m['version'])
+          PY
+      - name: Atualizar manifesto em main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -n "$GH_TOKEN" || { echo 'GITHUB_TOKEN indisponível'; exit 1; }
+          python3 - <<'PY'
+          import os,json,base64,urllib.request,urllib.error
+          repo=os.environ['GITHUB_REPOSITORY']
+          token=os.environ['GH_TOKEN']
+          url=f'https://api.github.com/repos/{repo}/contents/ota/manifest.json'
+          headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','User-Agent':'RJP-OTA-Publisher'}
+          def request(method,body=None):
+            data=None if body is None else json.dumps(body).encode()
+            with urllib.request.urlopen(urllib.request.Request(url,data=data,headers=headers,method=method),timeout=30) as response:
+              return json.load(response)
+          old=request('GET')
+          current=json.loads(base64.b64decode(old['content']))
+          new=json.load(open('ota-manifest-pending.json'))
+          def vt(v): return tuple(map(int,v.split('.')))
+          assert vt(new['version'])>vt(current['version']), 'A versão deve ser superior à publicada'
+          payload={'message':f'ota: publish v{new["version"]}','content':base64.b64encode((json.dumps(new,indent=2)+'\n').encode()).decode(),'sha':old['sha'],'branch':'main'}
+          request('PUT',payload)
+          print('Manifesto main publicado:',new['version'])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OTA-${{ inputs.version }}-zip-e-manifesto
+          path: |
+            rjp-train-live-ota-v*.zip
+            ota-manifest-pending.json
