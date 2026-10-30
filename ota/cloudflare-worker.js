@@ -1,7 +1,6 @@
 // Worker OTA RJP Train Live — Cloudflare R2, com suporte HTTP Range.
 // Binding R2: OTA_BUCKET. Worker de comboios permanece independente.
-const OBJECT = 'rjp-train-live-ota-v2.12.1.zip';
-const ROUTE = '/ota/v2.12.1.zip';
+const OTA_ROUTE = /^\/ota\/v(\d+\.\d+\.\d+)\.zip$/;
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
@@ -16,11 +15,13 @@ export default {
     if (url.pathname === '/health') {
       return Response.json({ ok: true, service: 'RJP Train Live OTA', storage: !!env.OTA_BUCKET }, { headers: cors });
     }
-    if (url.pathname !== ROUTE || !['GET', 'HEAD'].includes(request.method)) {
+    const match = OTA_ROUTE.exec(url.pathname);
+    if (!match || !['GET', 'HEAD'].includes(request.method)) {
       return new Response('Not found', { status: 404, headers: cors });
     }
     if (!env.OTA_BUCKET) return new Response('R2 binding OTA_BUCKET missing', { status: 503, headers: cors });
-    const metadata = await env.OTA_BUCKET.head(OBJECT);
+    const objectKey = `rjp-train-live-ota-v${match[1]}.zip`;
+    const metadata = await env.OTA_BUCKET.head(objectKey);
     if (!metadata) return new Response('OTA package not uploaded', { status: 404, headers: cors });
     const size = metadata.size;
     const headers = new Headers(cors);
@@ -62,7 +63,7 @@ export default {
     }
     const status = range ? 206 : 200;
     if (request.method === 'HEAD') return new Response(null, { status, headers });
-    const file = await env.OTA_BUCKET.get(OBJECT, range ? { range } : undefined);
+    const file = await env.OTA_BUCKET.get(objectKey, range ? { range } : undefined);
     if (!file) return new Response('OTA package missing', { status: 404, headers: cors });
     return new Response(file.body, { status, headers });
   },
