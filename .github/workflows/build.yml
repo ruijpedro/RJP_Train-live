@@ -2,7 +2,7 @@ name: RJP Train Live - Web + Android APK
 
 on:
   push:
-    branches: [main, master, fix/ota-download-diagnostics]
+    branches: [main, master, fix/ota-download-diagnostics, release/v2.12.3]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
@@ -140,7 +140,7 @@ jobs:
           s, n = re.subn(r'\bversionCode\s+\d+', f'versionCode {version_code}', s, count=1)
           if n != 1:
               raise RuntimeError('versionCode nao encontrado')
-          s, n = re.subn(r'\bversionName\s+["\'][^"\']+["\']', 'versionName "2.12.0"', s, count=1)
+          s, n = re.subn(r'\bversionName\s+["\'][^"\']+["\']', 'versionName "2.12.3"', s, count=1)
           if n != 1:
               raise RuntimeError('versionName nao encontrado')
           p.write_text(s)
