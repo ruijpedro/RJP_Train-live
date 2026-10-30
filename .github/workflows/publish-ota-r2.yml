@@ -101,9 +101,9 @@ jobs:
           PY
       - name: Atualizar manifesto em main
         env:
-          GH_TOKEN: ${{ secrets.OTA_PUBLISH_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          test -n "$GH_TOKEN" || { echo 'Configurar OTA_PUBLISH_GITHUB_TOKEN com permissão Contents:write'; exit 1; }
+          test -n "$GH_TOKEN" || { echo 'GITHUB_TOKEN indisponível'; exit 1; }
           python3 - <<'PY'
           import os,json,base64,urllib.request,urllib.error
           repo=os.environ['GITHUB_REPOSITORY']
