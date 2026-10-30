@@ -2,7 +2,7 @@ name: RJP Train Live - Web + Android APK
 
 on:
   push:
-    branches: [main, master, fix/ota-download-diagnostics, release/v2.12.3]
+    branches: [main, master, fix/ota-download-diagnostics, release/v2.12.3, test/ota-v2.12.4]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
