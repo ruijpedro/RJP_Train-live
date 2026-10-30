@@ -2,7 +2,7 @@ import {Capacitor,CapacitorHttp} from '@capacitor/core';
 import {CapacitorUpdater} from '@capgo/capacitor-updater';
 
 // Manual pilot. Existing push, Firebase, D1 and alert storage are untouched.
-const URL=(import.meta.env.VITE_OTA_MANIFEST_URL||'https://raw.githubusercontent.com/ruijpedro/RJP_Train-live/main/ota/manifest.json').trim();
+const MANIFEST_URL=(import.meta.env.VITE_OTA_MANIFEST_URL||'https://raw.githubusercontent.com/ruijpedro/RJP_Train-live/main/ota/manifest.json').trim();
 const APP='pt.rjp.trainlive';
 const VERSION='2.12.0';
 function isAllowedOtaUrl(value){
@@ -26,7 +26,7 @@ export async function confirmOtaReady(){
 }
 export async function checkOtaUpdate(){
  if(!Capacitor.isNativePlatform())throw Error('OTA apenas disponível na APK Android.');
- const r=await fetch(URL,{cache:'no-store'});
+ const r=await fetch(MANIFEST_URL,{cache:'no-store'});
  if(!r.ok)throw Error(`Manifesto HTTP ${r.status}`);
  const m=await r.json();
  if(m.appId!==APP||!parts(m.version))throw Error('Manifesto OTA inválido.');
@@ -123,7 +123,7 @@ export async function diagnoseOta(){
   finally{clearTimeout(timer);}
   return null;
  };
- const zip=await probe('Manifesto',URL);
+ const zip=await probe('Manifesto',MANIFEST_URL);
  if(zip)await probe('ZIP HTTP HEAD',zip,'HEAD');
  lines.push('Nota: HEAD testa acesso pela WebView, não substitui a descarga nativa Capgo.');
  return lines.join('\n');
