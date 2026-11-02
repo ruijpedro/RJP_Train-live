@@ -140,7 +140,17 @@ function App(){
   if(/^\\d+$/.test(query))return number===query;
   return [number,t.service,t.serviceCode,t.origin?.designation??t.origin,t.destination?.designation??t.destination,t.lastStation,t.nextStop?.designation??t.nextStop,...(Array.isArray(t.trainStops)?t.trainStops.flatMap(st=>[st?.station?.designation,st?.station?.name,st?.designation]):[])].some(v=>normalizeSearch(v).includes(query));
  });
- const matchingStations=query&&!/^\\d+$/.test(query)?Object.values(layers.current.st?._layers||{}).filter(layer=>normalizeSearch(layer.feature?.properties?.name??layer.feature?.properties?.designacao).includes(query)).slice(0,12):[];
+ const stationName=layer=>String(layer.feature?.properties?.name??layer.feature?.properties?.designacao??"");
+ const stationScore=(name,term)=>{
+  const normalized=normalizeSearch(name).replace(/[^a-z0-9]+/g," ").trim();
+  const words=normalizeSearch(term).replace(/[^a-z0-9]+/g," ").trim().split(/\\s+/).filter(Boolean);
+  if(!words.length)return 0;
+  if(normalized===words.join(" "))return 100;
+  if(normalized.startsWith(words.join(" ")))return 90;
+  if(normalized.includes(words.join(" ")))return 80;
+  return words.every(word=>normalized.split(" ").some(token=>token.startsWith(word)))?60:0;
+ };
+ const matchingStations=query&&!/^\\d+$/.test(query)?Object.values(layers.current.st?._layers||{}).map(layer=>({layer,score:stationScore(stationName(layer),query)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||stationName(a.layer).localeCompare(stationName(b.layer),"pt")).slice(0,30).map(x=>x.layer):[];
  function submitSearch(e){
   e?.preventDefault?.();const term=q.trim();setSubmittedQuery(term);if(!term)return;
   const key=normalizeSearch(term),numeric=/^\\d+$/.test(key);
@@ -148,9 +158,8 @@ function App(){
   if(tr){focusTrain(tr);return;}
   if(numeric){setSel(null);return;}
   const stations=Object.values(layers.current.st?._layers||{});
-  const stationName=layer=>normalizeSearch(layer.feature?.properties?.name??layer.feature?.properties?.designacao);
-  const st=stations.find(layer=>stationName(layer)===key)||stations.find(layer=>stationName(layer).includes(key));
-  if(st)focusStation(st);
+  const matches=stations.map(layer=>({layer,score:stationScore(stationName(layer),term)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+  if(matches.length===1)focusStation(matches[0].layer);
  }
  function focusStation(layer){const p=layer.getLatLng?.();if(p){mapRef.current?.setView(p,14,{animate:true});layer.openTooltip?.();}}
  function focusTrain(t){const lat=Number(t.latitude??t.lat),lon=Number(t.longitude??t.lng??t.lon);if(Number.isFinite(lat)&&Number.isFinite(lon))mapRef.current?.setView([lat,lon],14,{animate:true});setSel(t);}
