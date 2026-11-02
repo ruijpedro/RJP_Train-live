@@ -98,14 +98,31 @@ jobs:
           OTA_VERSION: ${{ inputs.version }}
         run: |
           python3 - <<'PY'
-          import json, hashlib, urllib.request
+          import json, hashlib, urllib.request, urllib.error, time
           m=json.load(open('ota-manifest-pending.json'))
-          req=urllib.request.Request(m['url'],headers={'Cache-Control':'no-cache'})
-          with urllib.request.urlopen(req,timeout=90) as response:
-            assert response.status==200, response.status
-            digest=hashlib.sha256(response.read()).hexdigest()
-          assert digest==m['checksum'], f'Checksum remota divergente: {digest}'
-          print('ZIP público verificado:',m['version'])
+          expected=m['checksum']
+          headers={'Cache-Control':'no-cache','User-Agent':'RJP-Train-Live-OTA-Release/1.0','Accept':'application/zip'}
+          for attempt in range(1,6):
+            try:
+              req=urllib.request.Request(m['url'],headers=headers)
+              with urllib.request.urlopen(req,timeout=90) as response:
+                if response.status!=200:
+                  raise RuntimeError(f'HTTP {response.status}')
+                digest=hashlib.sha256(response.read()).hexdigest()
+              if digest!=expected:
+                raise RuntimeError(f'Checksum remoto divergente: {digest} != {expected}')
+              print('ZIP público verificado:',m['version'])
+              break
+            except urllib.error.HTTPError as exc:
+              print(f'Tentativa {attempt}/5: HTTP {exc.code}; URL: {m["url"]}',flush=True)
+              if exc.code in (401,403):
+                raise SystemExit('Worker bloqueou a verificação do GitHub Actions. Verificar regras de segurança do Cloudflare e acesso do Worker.') from exc
+              if attempt==5: raise
+              time.sleep(10*attempt)
+            except Exception as exc:
+              print(f'Tentativa {attempt}/5: {exc}',flush=True)
+              if attempt==5: raise
+              time.sleep(10*attempt)
           PY
       - name: Atualizar manifesto em main
         env:
