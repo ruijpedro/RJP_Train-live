@@ -21,7 +21,8 @@ export function reconcileVehicles(records,{maxAgeMs=5*60*1000,now=Date.now()}={}
   const preferred=sorted.find(v=>str(v.source).includes("rui costa")||str(v.source).includes("comboios live"));
   const latest=preferred||sorted[0],out={...latest,sources:[...new Set(group.map(v=>v.source).filter(Boolean))],provenance:{}};
   for(const f of fields){
-   const candidate=sorted.find(v=>{
+   const candidates=preferred?[preferred,...sorted.filter(v=>v!==preferred)]:sorted;
+   const candidate=candidates.find(v=>{
     if(v[f]==null||v[f]==="")return false;
     if(f==="latitude"||f==="longitude")return validPosition(v);
     return true;
