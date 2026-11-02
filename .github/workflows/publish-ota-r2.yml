@@ -82,7 +82,7 @@ jobs:
           if not re.fullmatch(r'[0-9a-fA-F]{32}', value):
               raise SystemExit('R2_ACCOUNT_ID inválido: deve conter apenas os 32 caracteres hexadecimais do Cloudflare Account ID, sem URL, espaços ou aspas. Corrige o Secret no GitHub.')
           with open(os.environ['GITHUB_ENV'], 'a') as env:
-              env.write(f'R2_ENDPOINT=https://{value.lower()}.r2.cloudflarestorage.com\n')
+              env.write('R2_ENDPOINT=https://' + value.lower() + '.r2.cloudflarestorage.com' + chr(10))
           print('Account ID validado; endpoint R2 configurado.')
           PY
       - name: Publicar ZIP no R2
