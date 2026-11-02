@@ -1,7 +1,7 @@
 {
   "appId": "pt.rjp.trainlive",
-  "version": "2.12.4",
-  "url": "https://rjp-train-live-ota.rjpedro.workers.dev/ota/v2.12.4.zip",
-  "notes": "Teste OTA V2.12.4: botão Verificar atualização e interface; sem alterações nativas.",
-  "checksum": "e2201f221c4df66a2d7450576548fbdab999d084dad41989a16fb08325b20d34"
+  "version": "2.12.5",
+  "url": "https://rjp-train-live-ota.rjpedro.workers.dev/ota/v2.12.5.zip",
+  "notes": "Atualiza\u00e7\u00e3o OTA V2.12.5",
+  "checksum": "8a7b95867114c1dcd398098407afc790610139934869752cd9e5286cec73ecae"
 }
