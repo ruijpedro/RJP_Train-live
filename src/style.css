@@ -96,3 +96,5 @@ main{position:relative}
 .rjp-service-badge{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#123b66;color:#fff;border:2px solid #fff;box-shadow:0 1px 6px #0008;font-size:12px;font-weight:800;letter-spacing:-.3px;white-space:nowrap}
 
 .searchResults{padding:10px 12px;border-bottom:1px solid #cbd5e1}.searchResults small{display:block;margin:4px 0 8px}.searchStation{display:block;width:100%;text-align:left;margin:4px 0;padding:9px;border-radius:8px;cursor:pointer}
+
+.trainSearchForm{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.trainSearchForm input{min-width:170px;flex:1}.trainSearchForm button{white-space:nowrap}.trainSearchForm .searchSubmit{background:#1557b0;color:white;font-weight:700;border-radius:8px;padding:10px 14px}
