@@ -1,7 +1,7 @@
 {
   "appId": "pt.rjp.trainlive",
-  "version": "2.12.8",
-  "url": "https://rjp-train-live-ota.rjpedro.workers.dev/ota/v2.12.8.zip",
-  "notes": "Atualiza\u00e7\u00e3o OTA V2.12.8",
-  "checksum": "6cc7a9702f601c7587bb051581273e4a22a7092c0e9a78eca0285965a0aa87c4"
+  "version": "2.12.9",
+  "url": "https://rjp-train-live-ota.rjpedro.workers.dev/ota/v2.12.9.zip",
+  "notes": "Atualiza\u00e7\u00e3o OTA V2.12.9",
+  "checksum": "38d11d06e0f6cc958c3dd680161242f70a9a908ac55d68abc70faa51f0707cf2"
 }
