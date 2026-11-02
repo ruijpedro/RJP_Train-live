@@ -100,7 +100,7 @@ function App(){
    }
    setTrains(a);dispatchAlerts(a,getSavedAlerts(),new Date(),sendAlert);setUpdated(new Date());setStatus(`Online · ${primary}`);
    let g=layers.current.tr;g.clearLayers();a.forEach(t=>{let lat=+(t.latitude??t.lat),lon=+(t.longitude??t.lng??t.lon);if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
-    let d=+(t.delayMinutes??t.delay??0),mk=L.marker([lat,lon]).addTo(g);mk.bindTooltip(`🚆 ${n(t.trainNumber??t.number??t.id)} ${d>0?`+${d} min`:""}`);mk.on("click",()=>setSel(t));
+    let d=+(t.delayMinutes??t.delay??0),code=serviceTypeCode(t.service??t.trainService??t.serviceCode),mk=L.marker([lat,lon],{icon:L.divIcon({className:"rjp-service-icon",html:`<span class="rjp-service-badge">${code||"🚆"}</span>`,iconSize:[36,36],iconAnchor:[18,18]})}).addTo(g);mk.bindTooltip(`🚆 ${code?code+" ":""}${n(t.trainNumber??t.number??t.id)} ${d>0?`+${d} min`:""}`);mk.on("click",()=>setSel(t));
    })
    }catch(e){
    console.error("RJP Train Live feed error:",e);
