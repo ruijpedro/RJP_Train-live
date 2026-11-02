@@ -9,7 +9,8 @@
     "server": "node server/index.js",
     "android:add": "npx cap add android",
     "android:sync": "npm run build && npx cap sync android",
-    "android:open": "npx cap open android"
+    "android:open": "npx cap open android",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
