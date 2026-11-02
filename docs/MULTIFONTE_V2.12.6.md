@@ -26,5 +26,5 @@ A V2.12.5 consulta `/api/trains/active` no Worker RJP, normaliza os comboios, at
 
 ## Símbolos no mapa
 - Mostrar **sigla de serviço no próprio marcador**, não apenas no painel lateral: U (Urbano), R, IR, IC e AP (Alfa Pendular).
-- O utilizador pediu também a sigla **P**; confirmar o significado exato antes de a associar automaticamente a uma categoria. Até confirmação, mostrar P apenas se a fonte fornecer literalmente esse código.
+- **P = Pendular**, confirmado pelo utilizador. Manter **P** separado de **AP = Alfa Pendular**; não inferir P quando a fonte apenas diz AP.
 - Fonte de dados não determina sigla; a classificação depende do serviço identificado.
