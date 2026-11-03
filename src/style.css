@@ -104,20 +104,3 @@ main{position:relative}
 .roadServiceSearch{display:flex;flex-wrap:wrap;gap:12px;margin:10px 0}.roadServiceSearch label{display:flex;flex-direction:column;gap:4px;min-width:150px}.roadServiceSearch input{padding:8px;border:1px solid #a6bfd7;border-radius:8px}
 
 
-/* V2.12.12 — BUS separate from railway */
-.modeTabs{display:flex;gap:5px;flex-shrink:0}.modeTabs button{background:#24384e;border:1px solid #46617c;white-space:nowrap}.modeTabs button.selected{background:#1684df;border-color:#70b7ff}
-.busActive>.replacementPanel,.busActive>.stats,.busActive>#map,.busActive>aside,.busActive>.alertsPanel{display:none!important}
-.busActive>.busPage{grid-column:1/3;grid-row:3/5;min-height:0}
-.busPage{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);background:#0b1727;overflow:hidden}
-.busSidebar{overflow:auto;padding:16px;border-right:1px solid #30445c}
-.busSidebar h2{margin:0 0 6px}.busSidebar p{color:#b8c8d8;line-height:1.45}
-.busSidebar label{display:block;margin:12px 0;font-size:13px;color:#bcd0e4}
-.busSidebar input,.busSidebar select{display:block;width:100%;margin-top:5px;padding:10px;border-radius:8px;border:1px solid #46617c;background:#13283d;color:#fff;font-size:15px}
-.busOperator{display:block;cursor:default}.busOperator strong,.busOperator small{display:block}
-.busActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.busActions a{color:#e8f4ff;background:#155f9f;padding:8px 10px;border-radius:7px;text-decoration:none;font-size:12px}
-.busNote{font-size:12px}.busMapWrap{position:relative;min-height:400px}.busMap{width:100%;height:100%;min-height:400px}
-.busMapLegend{position:absolute;bottom:16px;left:16px;background:#12243be8;padding:9px 12px;border-radius:8px;z-index:500;font-size:12px}
-.busMapLegend small{display:block}
-.busActive nav .trainSearchForm,.busActive nav .refresh,.busActive nav .alertsButton{display:none}
-@media(max-width:750px){nav{flex-wrap:wrap;height:auto;min-height:50px}.modeTabs{width:100%;justify-content:center}.modeTabs button{flex:1}.busActive>.busPage{grid-column:1;grid-row:3/6;display:flex;flex-direction:column;overflow:visible}.busSidebar{overflow:visible}.busMapWrap{height:420px;flex:none}.busActive main{height:auto}.busActive footer{grid-row:6}}
