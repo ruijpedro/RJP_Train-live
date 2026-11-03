@@ -104,3 +104,12 @@ main{position:relative}
 .roadServiceSearch{display:flex;flex-wrap:wrap;gap:12px;margin:10px 0}.roadServiceSearch label{display:flex;flex-direction:column;gap:4px;min-width:150px}.roadServiceSearch input{padding:8px;border:1px solid #a6bfd7;border-radius:8px}
 
 
+
+/* V2.12.15: BUS isolated from the railway map; no second Leaflet instance. */
+.modeTabs{display:flex;gap:6px;flex-wrap:wrap}.modeTabs button{background:#24415b;color:#fff;border:1px solid #547a98;border-radius:8px;padding:9px 12px}.modeTabs button.selected{background:#0879ca}
+.busMode>.replacementPanel,.busMode>.stats,.busMode>#map,.busMode>aside,.busMode>.alertsPanel{display:none!important}
+.busMode .trainSearchForm,.busMode nav>.refresh,.busMode nav>.alertsButton{display:none!important}
+.busSafePanel{grid-column:1/-1;grid-row:3/5;overflow:auto;min-height:320px;padding:20px;background:#102338;color:#e9f4ff}
+.busSafeLinks{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:18px 0}
+.busSafeLinks article{border:1px solid #48647c;border-radius:10px;padding:16px;background:#1a344c}.busSafeLinks a{display:block;color:#a9dfff;margin:10px 0}.busSafePanel .busNote{color:#c8d6e3;font-size:13px}
+@media(max-width:750px){.busSafePanel{grid-column:1;grid-row:3/6;min-height:65dvh}.modeTabs{width:100%}.modeTabs button{flex:1}}
