@@ -16,6 +16,25 @@
 </head>
 <body>
   <div id="root"></div>
+  <script>
+    (function(){
+      var startupError='';
+      window.addEventListener('error',function(e){startupError=String(e.message||'Erro JavaScript');});
+      window.addEventListener('unhandledrejection',function(e){startupError=String((e.reason&&e.reason.message)||e.reason||'Erro de inicialização');});
+      setTimeout(function(){
+        var root=document.getElementById('root');
+        if(!root||root.children.length)return;
+        root.innerHTML='';
+        var panel=document.createElement('section');
+        panel.style.cssText='min-height:100vh;background:#102438;color:#fff;padding:28px 18px;font:16px/1.5 system-ui,sans-serif;box-sizing:border-box';
+        var heading=document.createElement('h1');heading.textContent='RJP Train Live — Recuperação';panel.appendChild(heading);
+        var info=document.createElement('p');info.textContent='A interface não arrancou. Os teus alertas e configurações não foram apagados.';panel.appendChild(info);
+        var err=document.createElement('p');err.style.cssText='overflow-wrap:anywhere;color:#ffcdad;font-size:13px';err.textContent=startupError||'Sem mensagem de erro disponível.';panel.appendChild(err);
+        var btn=document.createElement('button');btn.textContent='Tentar novamente';btn.style.cssText='padding:12px 18px;border:0;border-radius:8px;background:#1684df;color:white;font-size:16px';btn.onclick=function(){location.reload()};panel.appendChild(btn);
+        root.appendChild(panel);
+      },4500);
+    })();
+  </script>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>
