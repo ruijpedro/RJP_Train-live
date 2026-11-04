@@ -106,3 +106,9 @@ main{position:relative}
 /* Explicit service lettering on map markers, including Android WebView */
 .leaflet-marker-icon.rjp-service-icon{background:transparent!important;border:0!important;overflow:visible!important}
 .rjp-service-icon .rjp-service-badge{box-sizing:border-box;display:flex!important;align-items:center;justify-content:center;width:36px;height:36px;min-width:36px;min-height:36px;border-radius:50%;background:#123b66;color:#fff;border:2px solid #fff;font-family:Arial,sans-serif;font-size:13px;font-weight:800;line-height:1;box-shadow:0 2px 7px #0009;white-space:nowrap}
+
+/* Train detail: viewport-centred dialog, scroll only inside, close always reachable */
+.trainModalBackdrop{position:fixed!important;inset:0!important;display:flex!important;align-items:center!important;justify-content:center!important;box-sizing:border-box;padding:calc(12px + env(safe-area-inset-top,0px)) 12px calc(12px + env(safe-area-inset-bottom,0px))!important;overflow:hidden}
+.trainModalBackdrop .card{box-sizing:border-box;position:relative!important;inset:auto!important;transform:none!important;margin:auto!important;width:min(440px,100%)!important;max-height:calc(100dvh - 32px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))!important;overflow-y:auto!important;overscroll-behavior:contain}
+.trainModalBackdrop .card .trainModalClose{position:sticky!important;top:0!important;float:right;z-index:5;flex-shrink:0}
+@supports not (height:100dvh){.trainModalBackdrop .card{max-height:calc(100vh - 32px)!important}}
