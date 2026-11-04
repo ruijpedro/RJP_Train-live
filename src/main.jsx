@@ -39,13 +39,20 @@ const n=v=>v??"—";
 const stopClock=(stop,kind)=>{
  const fields=kind==="departure"?["departure","scheduledDeparture","departureTime","ETD"]:["arrival","scheduledArrival","arrivalTime","ETA"];
  for(const field of fields){const value=stop?.[field];if(value==null||value==="")continue;
-  if(typeof value==="string"){const match=value.match(/(?:^|T|\\s)(\\d{1,2}:\\d{2})(?::\\d{2})?/);if(match)return match[1].padStart(5,"0");}
+  if(typeof value==="string"){const match=value.match(/(?:^|T|\s)(\d{1,2}:\d{2})(?::\d{2})?/);if(match)return match[1].padStart(5,"0");}
   if(typeof value==="number"&&Number.isFinite(value)&&value>=0&&value<1440){return String(Math.floor(value/60)).padStart(2,"0")+":"+String(value%60).padStart(2,"0");}
  }
  return null;
 };
 const terminalTimes=t=>{const stops=Array.isArray(t?.trainStops)?t.trainStops:[];return {departure:stopClock(stops[0],"departure"),arrival:stopClock(stops[stops.length-1],"arrival")}};
 const terminalScheduleText=t=>{const times=terminalTimes(t);return "Partida "+(times.departure??"não disponível")+" · Chegada "+(times.arrival??"não disponível")};
+const stationScheduleText=(train,stationKey)=>{
+ const stops=Array.isArray(train?.trainStops)?train.trainStops:[];
+ const clean=value=>String(value??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-PT").trim();
+ const stop=stops.find(st=>[st?.station?.designation,st?.station?.name,st?.designation].some(name=>clean(name)===clean(stationKey)))??stops.find(st=>[st?.station?.designation,st?.station?.name,st?.designation].some(name=>clean(name).includes(clean(stationKey))));
+ if(!stop)return "Sem horário para a estação pesquisada";
+ return "Nesta estação · chegada "+(stopClock(stop,"arrival")??"não disponível")+" · partida "+(stopClock(stop,"departure")??"não disponível");
+};
 
 async function requestAlertPermission(){
  if(Capacitor.isNativePlatform()){
@@ -192,7 +199,7 @@ function App(){
  {alertScope==='train'&&<label>Pesquisar comboios por estação<input value={alertTrainStation} onChange={e=>setAlertTrainStation(e.target.value)} placeholder="Ex.: Monte Real" list="stationsList"/></label>}
   <label>{alertScope==='station'?'Nome exato da estação':'Número do comboio'}<input value={alertTarget} onChange={e=>setAlertTarget(e.target.value)} placeholder={alertScope==='station'?'Ex.: Leiria':'Ex.: 6450'} list={alertScope==='station'?'stationsList':undefined}/></label>
  {alertScope==='combined'&&<label>Estação de destino do alerta<input value={alertStation} onChange={e=>setAlertStation(e.target.value)} placeholder='Ex.: Monte Real' list='stationsList'/></label>}
- {alertScope!=='station'&&stationLookupKey.length>=2&&<div className="alertTrainPicker"><strong>Comboios identificados em {stationLookup}</strong><p>Circulação recebida pela API; não inclui necessariamente todos os horários.</p>{availableTrainOptions.length?availableTrainOptions.map(t=>{const num=String(t.trainNumber??t.number??t.id);const code=serviceTypeCode(t.service??t.trainService??t.serviceCode);return <button type="button" className="alertTrainChoice" key={num} onClick={()=>selectAlertTrain(t)}><b>{code?code+" ":""}{num}</b> · {n(t.origin?.designation??t.origin)} → {n(t.destination?.designation??t.destination)}<small style={{display:"block",fontSize:".85em",marginTop:4}}>{terminalScheduleText(t)}</small></button>}):<p>Nenhum comboio identificado nesta estação nos dados atuais. Podes inserir o número manualmente.</p>}</div>}
+ {alertScope!=='station'&&stationLookupKey.length>=2&&<div className="alertTrainPicker"><strong>Comboios identificados em {stationLookup}</strong><p>Circulação recebida pela API; não inclui necessariamente todos os horários.</p>{availableTrainOptions.length?availableTrainOptions.map(t=>{const num=String(t.trainNumber??t.number??t.id);const code=serviceTypeCode(t.service??t.trainService??t.serviceCode);return <button type="button" className="alertTrainChoice" key={num} onClick={()=>selectAlertTrain(t)}><b>{code?code+" ":""}{num}</b> · {n(t.origin?.designation??t.origin)} → {n(t.destination?.designation??t.destination)}<small style={{display:"block",fontSize:".85em",marginTop:4}}>{terminalScheduleText(t)} · {stationScheduleText(t,stationLookup)}</small></button>}):<p>Nenhum comboio identificado nesta estação nos dados atuais. Podes inserir o número manualmente.</p>}</div>}
   <datalist id="stationsList">{[...new Set(trains.flatMap(t=>(t.trainStops||[]).map(s=>s?.station?.designation).filter(Boolean)))].sort().map(st=><option key={st} value={st}/>)}</datalist>
  <label>Evento<select value={alertEvent} onChange={e=>setAlertEvent(e.target.value)}><option value="both">Chegada e partida</option><option value="arrival">Chegada</option><option value="departure">Partida</option></select></label>
  <label>Antecedência livre (minutos, 0–1440)<input type="number" min="0" max="1440" step="1" value={alertLead} onChange={e=>setAlertLead(e.target.value)}/></label>
