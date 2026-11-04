@@ -89,7 +89,7 @@ function sendAlert(c){
 function App(){
  const [showIntercityBus,setShowIntercityBus]=useState(false);
  const [railFilters,setRailFilters]=useState(()=>{try{const v=JSON.parse(localStorage.getItem("rjp_rail_filters")||"null");return Array.isArray(v)?v:["U","R","IR","IC","A","AP"]}catch{return ["U","R","IR","IC","A","AP"]}});
- useEffect(()=>{localStorage.setItem("rjp_rail_filters",JSON.stringify(railFilters));const group=layers.current.tr;if(group)group.eachLayer(layer=>{const el=layer.getElement?.();if(el)el.style.display=(!layer.options?.rjpCode||railFilters.includes(layer.options.rjpCode))?"":"none"})},[railFilters,trains]);
+ useEffect(()=>{localStorage.setItem("rjp_rail_filters",JSON.stringify(railFilters))},[railFilters]);
  const [otaState,setOtaState]=useState(""),[otaCandidate,setOtaCandidate]=useState(null),[otaBusy,setOtaBusy]=useState(false);
  useEffect(()=>{confirmOtaReady().catch(console.warn)},[]);
  async function checkOta(){setOtaBusy(true);try{const candidate=await checkOtaUpdate();setOtaCandidate(candidate);setOtaState(candidate?`Atualização ${candidate.version} disponível.`:"Sem atualização OTA disponível.")}catch(e){setOtaState(`OTA: ${e.message}`)}finally{setOtaBusy(false)}}
@@ -134,6 +134,7 @@ function App(){
    setStatus(`Fonte indisponível · ${msg}`)
   } finally { setLoading(false); }
  }
+ useEffect(()=>{const group=layers.current.tr;if(group)group.eachLayer(layer=>{const el=layer.getElement?.();if(el)el.style.display=(!layer.options?.rjpCode||railFilters.includes(layer.options.rjpCode))?"":"none"})},[railFilters,trains]);
  useEffect(()=>{load();let i=setInterval(load,30000);return()=>clearInterval(i)},[]);
  useEffect(()=>{const i=setInterval(()=>setClock(new Date()),30000);return()=>clearInterval(i)},[]);
  useEffect(()=>{if(!sel)return;const fresh=trains.find(t=>String(t.trainNumber??t.id)===String(sel.trainNumber??sel.id));if(fresh&&fresh!==sel)setSel(fresh)},[trains]);
