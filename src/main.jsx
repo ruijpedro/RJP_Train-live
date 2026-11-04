@@ -134,6 +134,11 @@ function App(){
  }
 
  const normalizeSearch=v=>String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-PT").trim();
+ const [alertTrainStation,setAlertTrainStation]=useState("");
+ const stationLookup=alertScope==='combined'?alertStation:alertTrainStation;
+ const stationLookupKey=normalizeSearch(stationLookup);
+ const availableTrainOptions=stationLookupKey.length>=2?trains.filter(t=>(Array.isArray(t.trainStops)?t.trainStops:[]).some(st=>[st?.station?.designation,st?.station?.name,st?.designation].some(name=>normalizeSearch(name).includes(stationLookupKey)))).filter(t=>String(t.trainNumber??t.number??t.id??"").trim()).slice(0,50):[];
+ function selectAlertTrain(t){setAlertTarget(String(t.trainNumber??t.number??t.id));setAlertMsg("Comboio selecionado. Confirma a estação, os dias e o evento antes de guardar.");}
  const query=normalizeSearch(submittedQuery);
  const filtered=trains.filter(t=>{
   if(!query)return true;
@@ -170,9 +175,11 @@ function App(){
  {alertOpen&&<section className="alertsPanel"><div className="alertsHeading"><h2>🔔 Alertas ferroviários</h2><button onClick={()=>setAlertOpen(false)} aria-label="Fechar alertas">×</button></div>
  <p>Alertas de horários previstos, baseados na WebApp Comboios Live — Rui Costa. Com Firebase e o Worker configurados, os avisos push podem chegar mesmo com a aplicação fechada. Os horários são previstos, não confirmações de circulação.</p>
  <div className="alertsForm"><label>Monitorizar<select value={alertScope} onChange={e=>setAlertScope(e.target.value)}><option value="station">Estação</option><option value="train">Comboio</option><option value="combined">Comboio + estação</option></select></label>
- <label>{alertScope==='station'?'Nome exato da estação':'Número do comboio'}<input value={alertTarget} onChange={e=>setAlertTarget(e.target.value)} placeholder={alertScope==='station'?'Ex.: Leiria':'Ex.: 6450'} list={alertScope==='station'?'stationsList':undefined}/></label>
+ {alertScope==='train'&&<label>Pesquisar comboios por estação<input value={alertTrainStation} onChange={e=>setAlertTrainStation(e.target.value)} placeholder="Ex.: Monte Real" list="stationsList"/></label>}
+  <label>{alertScope==='station'?'Nome exato da estação':'Número do comboio'}<input value={alertTarget} onChange={e=>setAlertTarget(e.target.value)} placeholder={alertScope==='station'?'Ex.: Leiria':'Ex.: 6450'} list={alertScope==='station'?'stationsList':undefined}/></label>
  {alertScope==='combined'&&<label>Estação de destino do alerta<input value={alertStation} onChange={e=>setAlertStation(e.target.value)} placeholder='Ex.: Monte Real' list='stationsList'/></label>}
- <datalist id="stationsList">{[...new Set(trains.flatMap(t=>(t.trainStops||[]).map(s=>s?.station?.designation).filter(Boolean)))].sort().map(st=><option key={st} value={st}/>)}</datalist>
+ {alertScope!=='station'&&stationLookupKey.length>=2&&<div className="alertTrainPicker"><strong>Comboios identificados em {stationLookup}</strong><p>Circulação recebida pela API; não inclui necessariamente todos os horários.</p>{availableTrainOptions.length?availableTrainOptions.map(t=>{const num=String(t.trainNumber??t.number??t.id);const code=serviceTypeCode(t.service??t.trainService??t.serviceCode);return <button type="button" className="alertTrainChoice" key={num} onClick={()=>selectAlertTrain(t)}><b>{code?code+" ":""}{num}</b> · {n(t.origin?.designation??t.origin)} → {n(t.destination?.designation??t.destination)}</button>}):<p>Nenhum comboio identificado nesta estação nos dados atuais. Podes inserir o número manualmente.</p>}</div>}
+  <datalist id="stationsList">{[...new Set(trains.flatMap(t=>(t.trainStops||[]).map(s=>s?.station?.designation).filter(Boolean)))].sort().map(st=><option key={st} value={st}/>)}</datalist>
  <label>Evento<select value={alertEvent} onChange={e=>setAlertEvent(e.target.value)}><option value="both">Chegada e partida</option><option value="arrival">Chegada</option><option value="departure">Partida</option></select></label>
  <label>Antecedência livre (minutos, 0–1440)<input type="number" min="0" max="1440" step="1" value={alertLead} onChange={e=>setAlertLead(e.target.value)}/></label>
  <label>Periodicidade<select value={scheduleType} onChange={e=>setScheduleType(e.target.value)}><option value="weekly">Dias da semana</option><option value="date">Data específica</option><option value="monthly">Dia do mês</option></select></label>
