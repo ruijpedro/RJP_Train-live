@@ -35,6 +35,16 @@ export async function checkOtaUpdate(){
  if(!isAllowedOtaUrl(m.url))throw Error('URL OTA inválido: '+String(m.url));
  return {version:m.version,url:m.url,checksum:m.checksum};
 }
+// Preparar silenciosamente o pacote para a próxima abertura, como na Mobilis.
+export async function prepareAutomaticOta(m){
+ if(!Capacitor.isNativePlatform())return false;
+ if(!m||!isNewer(m.version,VERSION)||!isAllowedOtaUrl(m.url)||!/^[a-f0-9]{64}$/i.test(m.checksum||''))throw Error('Pacote OTA inválido.');
+ const bundle=await CapacitorUpdater.download({url:m.url,version:m.version,checksum:m.checksum});
+ if(!bundle?.id)throw Error('Descarga OTA sem pacote válido.');
+ await CapacitorUpdater.next({id:bundle.id});
+ return true;
+}
+
 export async function installOtaUpdate(m){
  if(!Capacitor.isNativePlatform())throw Error('Apenas Android.');
  if(!m||!isNewer(m.version,VERSION)||!isAllowedOtaUrl(m.url))throw Error('Pacote OTA inválido.');
