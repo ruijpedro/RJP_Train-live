@@ -1,6 +1,6 @@
 {
   "name": "rjp-train-live",
-  "version": "2.12.25",
+  "version": "2.12.26",
   "private": true,
   "type": "module",
   "scripts": {
