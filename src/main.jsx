@@ -6,7 +6,7 @@ import{LocalNotifications}from"@capacitor/local-notifications";
 import{PushNotifications}from"@capacitor/push-notifications";
 import{initPush,savePushRules,pushState,scheduleRemotePushTest}from"./push.js";
 import{trainStopsEta,minutesUntil,etaProgress}from"./eta.js";
-import {checkOtaUpdate,installOtaUpdate,confirmOtaReady} from"./ota.js";
+import {checkOtaUpdate,installOtaUpdate,prepareAutomaticOta,confirmOtaReady} from"./ota.js";
 import {serviceTypeCode,serviceTypeLabel,DATA_SOURCES} from "./sources.js";
 import L from"leaflet";import"./style.css";
 import{getSavedAlerts,dispatchAlerts,ALERTS_KEY}from"./alerts.js";
@@ -89,7 +89,21 @@ function App(){
  const [railFilters,setRailFilters]=useState(()=>{try{const v=JSON.parse(localStorage.getItem("rjp_rail_filters")||"null");return Array.isArray(v)?v:["U","R","IR","IC","AP","SUD"]}catch{return ["U","R","IR","IC","AP","SUD"]}});
  useEffect(()=>{localStorage.setItem("rjp_rail_filters",JSON.stringify(railFilters))},[railFilters]);
  const [otaState,setOtaState]=useState(""),[otaCandidate,setOtaCandidate]=useState(null),[otaBusy,setOtaBusy]=useState(false);
- useEffect(()=>{confirmOtaReady().catch(console.warn)},[]);
+ useEffect(()=>{
+  let cancelled=false;
+  (async()=>{
+   try{
+    await confirmOtaReady();
+    if(!Capacitor.isNativePlatform()||cancelled)return;
+    const candidate=await checkOtaUpdate();
+    if(!candidate||cancelled)return;
+    setOtaState('A preparar automaticamente a versão '+candidate.version+'…');
+    await prepareAutomaticOta(candidate);
+    if(!cancelled){setOtaCandidate(null);setOtaState('Versão '+candidate.version+' preparada. Fecha e volta a abrir a aplicação para atualizar.');}
+   }catch(e){console.warn('OTA automática:',e);if(!cancelled&&Capacitor.isNativePlatform())setOtaState('OTA automática indisponível: '+e.message);}
+  })();
+  return()=>{cancelled=true};
+ },[]);
  async function checkOta(){setOtaBusy(true);try{const candidate=await checkOtaUpdate();setOtaCandidate(candidate);setOtaState(candidate?`Atualização ${candidate.version} disponível.`:"Sem atualização OTA disponível.")}catch(e){setOtaState(`OTA: ${e.message}`)}finally{setOtaBusy(false)}}
  async function applyOta(){if(!otaCandidate)return;setOtaBusy(true);try{setOtaState("A descarregar atualização OTA…");await installOtaUpdate(otaCandidate);setOtaState("Atualização aplicada. A reiniciar…")}catch(e){setOtaState(`OTA falhou: ${e.message}`)}finally{setOtaBusy(false)}}
  const [scheduleType,setScheduleType]=useState("weekly"),[alertDate,setAlertDate]=useState(""),[monthDay,setMonthDay]=useState(1),[monthYear,setMonthYear]=useState(""); const [clock,setClock]=useState(()=>new Date()); const mapRef=useRef(),layers=useRef({}); const [alertDays,setAlertDays]=useState([0,1,2,3,4,5,6]),[notifyBefore,setNotifyBefore]=useState(true),[notifyOnArrival,setNotifyOnArrival]=useState(true),[alerts,setAlerts]=useState(getSavedAlerts),[alertOpen,setAlertOpen]=useState(false),[alertScope,setAlertScope]=useState("station"),[alertStation,setAlertStation]=useState(""),[alertTarget,setAlertTarget]=useState(""),[alertEvent,setAlertEvent]=useState("both"),[alertLead,setAlertLead]=useState(10),[alertMsg,setAlertMsg]=useState(""); const[trains,setTrains]=useState([]),[sel,setSel]=useState(),[q,setQ]=useState(""),[submittedQuery,setSubmittedQuery]=useState(""),[status,setStatus]=useState("A ligar…"),[updated,setUpdated]=useState(),[loading,setLoading]=useState(false);
