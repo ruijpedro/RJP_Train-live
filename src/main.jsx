@@ -100,7 +100,7 @@ function App(){
    attribution:"Railway overlay © OpenRailwayMap contributors",opacity:.95,maxZoom:19
  }).addTo(m);
  layers.current.rail=L.geoJSON(null,{style:{color:"#ff8a00",weight:5,opacity:.95}}).addTo(m);
- layers.current.st=L.geoJSON(null,{pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:4,weight:1,fillOpacity:.9}),onEachFeature:(f,l)=>l.bindTooltip(f.properties?.name||f.properties?.designacao||"Estação")}).addTo(m);
+ layers.current.st=L.geoJSON(null,{pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:4,weight:1,fillOpacity:.9}),onEachFeature:(f,l)=>{l.bindTooltip(f.properties?.name||f.properties?.designacao||"Estação");l.on("click",()=>focusStation(l));}}).addTo(m);
  layers.current.tr=L.layerGroup().addTo(m);
  Promise.all([fetch(`${BASE}data/railways.geojson`).then(r=>r.ok?r.json():null),fetch(`${BASE}data/stations.geojson`).then(r=>r.ok?r.json():null)]).then(([r,s])=>{if(r)layers.current.rail.addData(r);if(s)layers.current.st.addData(s)});
  return()=>m.remove()},[]);
