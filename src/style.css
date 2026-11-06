@@ -114,3 +114,14 @@ main{position:relative}
 @supports not (height:100dvh){.trainModalBackdrop .card{max-height:calc(100vh - 32px)!important}}
 
 .rjpBusPanel{padding:16px;margin:10px 16px;border:1px solid #476078;border-radius:12px;background:#0e2439;color:#edf6ff}.rjpBusPanel h2{margin:0 0 8px}.rjpBusFields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.rjpBusFields label{display:flex;flex-direction:column;gap:5px}.rjpBusFields input,.rjpBusFields select{width:100%;box-sizing:border-box;padding:10px;border-radius:7px;border:1px solid #4c6c86;background:#061727;color:white}.rjpBusLinks{display:flex;flex-wrap:wrap;gap:10px}.rjpBusLinks a{display:inline-block;padding:12px;background:#1769ba;border-radius:8px;color:white;text-decoration:none}.rjpBusNote{opacity:.8;font-size:.9rem}
+
+/* Pesquisa: resultados sempre legíveis e scroll vertical em Android. */
+aside{min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;background:#0c1827;color:#edf5ff}
+aside .searchResults{display:block;flex:0 0 auto;min-width:0;background:#12263b;color:#edf5ff;border:1px solid #35516e;border-radius:12px;margin:8px 0 12px;padding:12px}
+aside .searchResults h3{color:#fff;margin:0 0 8px}
+aside .searchResults small,aside .searchResults p{color:#c5d6e7}
+aside .searchStation,aside .alertTrainChoice{display:block;width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;text-align:left;margin:6px 0;padding:11px 12px;border:1px solid #426789;border-radius:9px;background:#193b59;color:#fff;cursor:pointer}
+aside .searchStation:focus-visible,aside .alertTrainChoice:focus-visible{outline:3px solid #78c6ff;outline-offset:2px}
+.stationTrainList{display:flex;flex-direction:column;gap:4px;max-height:min(48dvh,420px);min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-right:4px}
+.stationTrainList .alertTrainChoice{flex:0 0 auto}
+@media(max-width:750px){aside{display:flex;flex-direction:column;align-items:stretch;overflow-y:auto;overflow-x:hidden}aside article{min-width:0;width:100%;flex:0 0 auto}aside .searchResults{width:100%}.stationTrainList{max-height:42dvh}}
