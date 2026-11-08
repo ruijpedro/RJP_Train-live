@@ -123,7 +123,14 @@ function App(){
   try{
    let j,a,primary;
    if(LOCAL_API){
-     let r=await fetch(`${LOCAL_API}/trains/active`);if(!r.ok)throw Error(r.status);j=await r.json();
+     let r=await fetch(`${LOCAL_API}/trains/active`);
+     if(!r.ok){
+       // Upstream 502/503: try the public feed instead of leaving the map empty.
+       const backup=await fetch(RUI_FEED,{headers:{accept:"application/json"}});
+       if(!backup.ok)throw Error(`API ${r.status}; fonte alternativa ${backup.status}`);
+       const fallback=await backup.json();
+       j={data:(Array.isArray(fallback)?fallback:(fallback.data||fallback.trains||[])).map(directTrain),primary:"Comboios Live · fonte alternativa"};
+     }else j=await r.json();
      const raw=Array.isArray(j)?j:(j.data||j.trains||[]);
      // The Cloudflare Worker returns the original Comboios Live schema.
      // Normalize it here so the map always receives top-level coordinates.
