@@ -1,7 +1,7 @@
 
 import React,{useEffect,useRef,useState}from"react";
 import{createRoot}from"react-dom/client";
-import{Capacitor}from"@capacitor/core";
+import{Capacitor,CapacitorHttp}from"@capacitor/core";
 import{LocalNotifications}from"@capacitor/local-notifications";
 import{PushNotifications}from"@capacitor/push-notifications";
 import{initPush,savePushRules,pushState,scheduleRemotePushTest}from"./push.js";
@@ -18,6 +18,20 @@ const SAVED_API=(localStorage.getItem("rjp_api")||"").replace(/\/$/,"");
 const LOCAL_API=(BUILD_API||DEFAULT_API||SAVED_API).replace(/\/$/,"");
 const RUI_FEED="https://comboios.ruicosta.pt/api/cache/trains/active";
 const BASE=import.meta.env.BASE_URL;
+async function getTrainFeed(url){
+ try{
+  const response=await fetch(url,{headers:{accept:"application/json"},cache:"no-store"});
+  if(!response.ok)throw Error("HTTP "+response.status);
+  return await response.json();
+ }catch(webError){
+  // Android native HTTP bypasses browser CORS; keep ordinary fetch for WebApp.
+  if(!Capacitor.isNativePlatform())throw webError;
+  const native=await CapacitorHttp.get({url,headers:{accept:"application/json"}});
+  if(native.status<200||native.status>=300)throw Error("HTTP "+native.status);
+  return typeof native.data==="string"?JSON.parse(native.data):native.data;
+ }
+}
+
 function directTrain(x){
  const raw=x?.data||{},live=raw?.status||{},fixed=x?.fixed||{},db=x?.db||{};
  const lat=Number(live.latitude??fixed.latitude),lon=Number(live.longitude??fixed.longitude);
@@ -123,23 +137,21 @@ function App(){
   try{
    let j,a,primary;
    if(LOCAL_API){
-     let r=await fetch(`${LOCAL_API}/trains/active`);
-     if(!r.ok){
-       // Upstream 502/503: try the public feed instead of leaving the map empty.
-       const backup=await fetch(RUI_FEED,{headers:{accept:"application/json"}});
-       if(!backup.ok)throw Error(`API ${r.status}; fonte alternativa ${backup.status}`);
-       const fallback=await backup.json();
-       j={data:(Array.isArray(fallback)?fallback:(fallback.data||fallback.trains||[])).map(directTrain),primary:"Comboios Live · fonte alternativa"};
-     }else j=await r.json();
-     const raw=Array.isArray(j)?j:(j.data||j.trains||[]);
-     // The Cloudflare Worker returns the original Comboios Live schema.
-     // Normalize it here so the map always receives top-level coordinates.
-     a=raw.map(x=>(x?.data?.status||x?.fixed||x?.db)?directTrain(x):x);
-     primary=j?.primary||"RJP API · Comboios Live";
+    try{
+     j=await getTrainFeed(`${LOCAL_API}/trains/active`);
+     primary="RJP API · Comboios Live";
+    }catch(primaryError){
+     console.warn("API RJP indisponível; tentar Comboios Live diretamente",primaryError);
+     j=await getTrainFeed(RUI_FEED);
+     primary="Comboios Live · ligação direta";
+    }
    }else{
-     let r=await fetch(RUI_FEED,{headers:{accept:"application/json"}});if(!r.ok)throw Error(r.status);j=await r.json();
-     a=(Array.isArray(j)?j:(j.data||j.trains||[])).map(directTrain);primary="Comboios Live";
+    j=await getTrainFeed(RUI_FEED);
+    primary="Comboios Live · ligação direta";
    }
+   const raw=Array.isArray(j)?j:(j?.data||j?.trains||[]);
+   if(!Array.isArray(raw))throw Error("Formato da fonte inválido");
+   a=raw.map(x=>(x?.data?.status||x?.fixed||x?.db)?directTrain(x):x);
    setTrains(a);dispatchAlerts(a,getSavedAlerts(),new Date(),sendAlert);setUpdated(new Date());setStatus(`Online · ${primary}`);
    let g=layers.current.tr;g.clearLayers();a.forEach(t=>{let lat=+(t.latitude??t.lat),lon=+(t.longitude??t.lng??t.lon);if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
     let d=+(t.delayMinutes??t.delay??0),code=serviceTypeCode([t.service,t.trainService,t.serviceCode,t.trainServiceName,t.category,t.type,t.db?.trainService?.designation].filter(Boolean).join(" ")),mk=L.marker([lat,lon],{icon:L.divIcon({className:"rjp-service-icon",html:`<span class="rjp-service-badge">${code||"🚆"}</span>`,iconSize:[36,36],iconAnchor:[18,18]}),rjpCode:code}).addTo(g);if(code&&!railFilters.includes(code)){const el=mk.getElement?.();if(el)el.style.display="none"}mk.bindTooltip(`🚆 ${code?code+" ":""}${n(t.trainNumber??t.number??t.id)} ${d>0?`+${d} min`:""}`);mk.on("click",()=>setSel(t));
@@ -214,7 +226,7 @@ function App(){
  }
  function focusStation(layer){setSelectedStation(stationName(layer));const p=layer.getLatLng?.();if(p){mapRef.current?.setView(p,14,{animate:true});layer.openTooltip?.();}}
  function focusTrain(t){const lat=Number(t.latitude??t.lat),lon=Number(t.longitude??t.lng??t.lon);if(Number.isFinite(lat)&&Number.isFinite(lon))mapRef.current?.setView([lat,lon],14,{animate:true});setSel(t);}
- return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2.12.29</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>Fontes: <b>{DATA_SOURCES.map(s=>s.name).join(" · ")}</b></small></div></header>
+ return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2.12.30</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>Fontes: <b>{DATA_SOURCES.map(s=>s.name).join(" · ")}</b></small></div></header>
  <nav><form className="trainSearchForm" onSubmit={submitSearch}><input aria-label="Pesquisar comboio ou estação" placeholder="N.º comboio ou estação…" value={q} onChange={e=>setQ(e.target.value)}/><button type="submit" className="searchSubmit">🔎 Procurar</button>{submittedQuery&&<button type="button" onClick={()=>{setQ("");setSubmittedQuery("")}}>Limpar</button>}</form><button className={loading?"refresh loading":"refresh"} onClick={load} disabled={loading}><span>↻</span>{loading?" A atualizar…":" Atualizar"}</button><button className="alertsButton" onClick={()=>setAlertOpen(v=>!v)}>🔔 Alertas ({alerts.length})</button><button onClick={checkOta} disabled={otaBusy}>Verificar atualização</button>{otaCandidate&&<button onClick={applyOta} disabled={otaBusy}>Instalar {otaCandidate.version}</button>}</nav><section aria-label="Filtros de comboios" style={{display:"flex",gap:6,flexWrap:"wrap",padding:"8px 16px",alignItems:"center"}}><strong>🚆 Tipos no mapa</strong><button type="button" onClick={()=>setRailFilters(["U","R","IR","IC","AP","SUD","FT"])}>Todos</button>{["U","R","IR","IC","AP","SUD","FT"].map(code=><button type="button" key={code} aria-pressed={railFilters.includes(code)} onClick={()=>setRailFilters(v=>v.includes(code)?v.filter(x=>x!==code):[...v,code])} style={{opacity:railFilters.includes(code)?1:.45,fontWeight:railFilters.includes(code)?700:400}}>{code}</button>)}</section>{otaState&&<p role="status" className="otaStatus">{otaState}</p>}
  <section className="stats"><div><b>{trains.length}</b><small>comboios recebidos</small></div><div><b>{trains.filter(t=>+(t.delayMinutes??t.delay??0)>0).length}</b><small>com atraso</small></div><div><b>{updated?updated.toLocaleTimeString("pt-PT"):"—"}</b><small>última atualização</small></div></section>
  {alertOpen&&<section className="alertsPanel"><div className="alertsHeading"><h2>🔔 Alertas ferroviários</h2><button onClick={()=>setAlertOpen(false)} aria-label="Fechar alertas">×</button></div>
