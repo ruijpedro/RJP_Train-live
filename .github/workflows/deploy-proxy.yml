@@ -11,6 +11,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Validate Cloudflare credentials format
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+          token=os.environ.get("CLOUDFLARE_API_TOKEN","")
+          account=os.environ.get("CLOUDFLARE_ACCOUNT_ID","")
+          errors=[]
+          if not token: errors.append("CLOUDFLARE_API_TOKEN está vazio.")
+          if any(ord(c)<33 or ord(c)>126 for c in token): errors.append("CLOUDFLARE_API_TOKEN tem espaços, quebras de linha ou caracteres não ASCII. Volta a colar apenas o token.")
+          if not re.fullmatch(r"[a-fA-F0-9]{32}",account): errors.append("CLOUDFLARE_ACCOUNT_ID deve conter exatamente 32 caracteres hexadecimais.")
+          if errors:
+              for e in errors: print("::error::"+e)
+              sys.exit(1)
+          print("Formato das credenciais válido (sem mostrar valores).")
+          PY
       - name: Deploy Cloudflare Worker
         working-directory: worker
         env:
