@@ -142,6 +142,25 @@ export default {
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
   const u=new URL(request.url);
   if(u.pathname==='/'||u.pathname==='/health')return json({ok:true,service:'RJP Train Live API',version:'2.9.1',source:'Comboios Live — Rui Costa'});
+  // Optional official CP timetable/journey API. Disabled until CP access is authorized
+  // and configured; never affects the existing live-position feed.
+  if(u.pathname.startsWith('/api/cp/')&&request.method==='GET'){
+   const cpKey=env.CP_TRAVEL_API_KEY,cpId=env.CP_CONNECT_ID,cpSecret=env.CP_CONNECT_SECRET;
+   if(!cpKey||!cpId||!cpSecret)return json({ok:false,source:'CP Travel API',available:false,reason:'not-configured',note:'Requer acesso autorizado aos servicos da CP'},503);
+   const match=u.pathname.match(/^\\/api\\/cp\\/(stations|trains\\/([0-9]{1,6})\\/timetable\\/([0-9]{4}-[0-9]{2}-[0-9]{2})|stations\\/([0-9A-Za-z-]{1,40})\\/timetable\\/([0-9]{4}-[0-9]{2}-[0-9]{2}))$/);
+   if(!match)return json({ok:false,error:'Consulta CP nao suportada'},400);
+   const path=match[1];
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+   try{
+    const upstream=await fetch('https://api-gateway.cp.pt/cp/services/travel-api/'+path,{
+     headers:{Accept:'application/json','x-api-key':cpKey,'x-cp-connect-id':cpId,'x-cp-connect-secret':cpSecret},
+     signal:controller.signal
+    });
+    if(!upstream.ok)return json({ok:false,source:'CP Travel API',upstreamStatus:upstream.status},502);
+    return new Response(upstream.body,{status:200,headers:{...cors,'Content-Type':'application/json','Cache-Control':'public,max-age=60','X-RJP-Source':'CP Travel API'}});
+   }catch(e){return json({ok:false,source:'CP Travel API',error:e?.name==='AbortError'?'timeout':'upstream-unavailable'},502)}
+   finally{clearTimeout(timer)}
+  }
   if(u.pathname==='/api/fertagus/positions'&&request.method==='GET'){
    try{
     const upstream='https://go.tmlmobilidade.pt/hub/api/v1/0XJC9/vehicles/positions';
