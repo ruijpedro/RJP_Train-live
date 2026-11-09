@@ -5,25 +5,28 @@ jobs:
   verificar:
     runs-on: ubuntu-latest
     steps:
-      - name: Verificar acessibilidade dos serviços oficiais CP
+      - name: Inspecionar recursos publicos da CP sem alterar a app
         shell: bash
         run: |
           python3 - <<'PY'
-          import urllib.request, urllib.error, json, time
-          urls = {
-            "CP site oficial": "https://www.cp.pt/pt",
-            "CP informacao tempo real": "https://www.cp.pt/info/w/tempo-real",
-            "CP horarios": "https://www.cp.pt/info/w/horarios-comboios",
-          }
-          for name, url in urls.items():
-              try:
-                  req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 (compatible; RJPTrainLiveDiagnostics/1.0)","Accept":"text/html"})
-                  with urllib.request.urlopen(req,timeout=15) as resp:
-                      body=resp.read(8192)
-                      print(json.dumps({"fonte":name,"http":resp.status,"content_type":resp.headers.get("Content-Type"),"amostra_bytes":len(body),"url_final":resp.url},ensure_ascii=False))
-              except urllib.error.HTTPError as e:
-                  print(json.dumps({"fonte":name,"http":e.code,"erro":"HTTP"},ensure_ascii=False))
-              except Exception as e:
-                  print(json.dumps({"fonte":name,"erro":type(e).__name__,"detalhe":str(e)[:120]},ensure_ascii=False))
-          print("NOTA: HTTP 200 numa pagina nao comprova API de posicoes GPS nem autorizacao de reutilizacao.")
+          import urllib.request, urllib.error, json, re, html
+          from urllib.parse import urljoin, urlparse
+          pages={"CP inicio":"https://www.cp.pt/pt","CP tempo real":"https://www.cp.pt/info/w/realtime"}
+          for name,url in pages.items():
+            try:
+              req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0","Accept":"text/html"})
+              with urllib.request.urlopen(req,timeout=20) as response:
+                body=response.read(400000).decode("utf-8","replace")
+                print(json.dumps({"pagina":name,"http":response.status,"url_final":response.url,"tipo":response.headers.get("Content-Type"),"bytes":len(body)},ensure_ascii=False))
+                resources=re.findall(r'(?:src|href)\\s*=\\s*["\\\']([^"\\\']+)["\\\']',body,re.I)
+                candidates=[]
+                for item in resources:
+                  absolute=urljoin(response.url,html.unescape(item))
+                  host=urlparse(absolute).hostname or ""
+                  if host.endswith("cp.pt") and (".js" in absolute or any(k in absolute.lower() for k in ("realtime","tempo-real","api","comboio","train"))):
+                    if absolute not in candidates:candidates.append(absolute)
+                print(json.dumps({"pagina":name,"recursos_candidatos":candidates[:35]},ensure_ascii=False))
+                print(json.dumps({"pagina":name,"marcadores":{term:term.lower() in body.lower() for term in ["fetch(","XMLHttpRequest","graphql","api/","próximos comboios","next trains"]}},ensure_ascii=False))
+            except Exception as e:print(json.dumps({"pagina":name,"erro":str(e)[:180]},ensure_ascii=False))
+          print("DIAGNOSTICO APENAS: nao prova que exista API publica nem acesso autorizado a GPS.")
           PY
