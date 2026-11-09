@@ -31,7 +31,7 @@ export async function discoverFertagus(fetchJson) {
     const url=TML_BASE+"/v1/"+encodeURIComponent(organization._id)+"/agencies";
     const response=await fetchJson(url);
     const agency=(response?.data||[]).find(a=>a._id===FERTAGUS_AGENCY_ID);
-    const positionsEnabled=agency?.services?.positions_enabled===true;
+    const positionsEnabled=agency?.open_data?.services?.positions_enabled===true;
     results.push({organizationId:organization._id,positionsEnabled,positionsUrl:TML_BASE+"/v1/"+encodeURIComponent(organization._id)+"/vehicles/positions"});
   }
   return results;
