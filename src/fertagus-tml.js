@@ -24,25 +24,12 @@ export function normalizeFertagusPositions(positions, now=Date.now(), maxAgeMs=1
   }));
 }
 export async function discoverFertagus(fetchJson) {
-  const organizations=await fetchJson(TML_BASE+"/v1/organizations");
-  const matching=findFertagusOrganizations(organizations?.data);
-  const results=[];
-  for(const organization of matching) {
-    const organizationId=organization._id;
-    const agencyUrl=TML_BASE+"/v1/"+encodeURIComponent(organizationId)+"/agencies";
-    try {
-      const response=await fetchJson(agencyUrl);
-      const agency=(response?.data||[]).find(a=>a._id===FERTAGUS_AGENCY_ID);
-      results.push({
-        organizationId,
-        positionsEnabled:agency?.open_data?.services?.positions_enabled===true,
-        positionsUrl:TML_BASE+"/v1/"+encodeURIComponent(organizationId)+"/vehicles/positions"
-      });
-    }catch(error){
-      results.push({organizationId,positionsEnabled:false,status:"agency-request-failed",error:String(error?.message||error)});
-    }
-  }
-  return results;
+ const organizations=await fetchJson(TML_BASE+"/v1/organizations");
+ return findFertagusOrganizations(organizations?.data).map(o=>({
+  organizationId:o._id,
+  positionsEnabled:null, // The global /v1/agencies endpoint returns 404; do not infer disabled.
+  positionsUrl:TML_BASE+"/v1/"+encodeURIComponent(o._id)+"/vehicles/positions"
+ }));
 }
 
 // Fetch once for diagnostics. Never use cached or estimated positions as live GPS.
