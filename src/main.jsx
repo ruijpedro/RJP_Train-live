@@ -8,6 +8,7 @@ import{initPush,savePushRules,pushState,scheduleRemotePushTest}from"./push.js";
 import{trainStopsEta,minutesUntil,etaProgress}from"./eta.js";
 import {checkOtaUpdate,installOtaUpdate,confirmOtaReady} from"./ota.js";
 import L from"leaflet";import"./style.css";
+import{discoverFertagus,normalizeFertagusPositions}from"./fertagus-tml.js";
 import{getSavedAlerts,dispatchAlerts,ALERTS_KEY}from"./alerts.js";
 import{scheduleLabel}from"./schedule.js";
 const DEFAULT_API="https://rjp-train-live-api.rjpedro.workers.dev/api";
@@ -80,8 +81,33 @@ function App(){
  layers.current.rail=L.geoJSON(null,{style:{color:"#ff8a00",weight:5,opacity:.95}}).addTo(m);
  layers.current.st=L.geoJSON(null,{pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:4,weight:1,fillOpacity:.9}),onEachFeature:(f,l)=>l.bindTooltip(f.properties?.name||f.properties?.designacao||"Estação")}).addTo(m);
  layers.current.tr=L.layerGroup().addTo(m);
+ layers.current.ft=L.layerGroup().addTo(m);
  Promise.all([fetch(`${BASE}data/railways.geojson`).then(r=>r.ok?r.json():null),fetch(`${BASE}data/stations.geojson`).then(r=>r.ok?r.json():null)]).then(([r,s])=>{if(r)layers.current.rail.addData(r);if(s)layers.current.st.addData(s)});
  return()=>m.remove()},[]);
+ async function loadFertagus(){
+  // Separate optional layer: CP loading and alert dispatch must not depend on TML.
+  const layer=layers.current.ft;
+  if(!layer)return;
+  try{
+   const fetchJson=async url=>{
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);
+    try{const response=await fetch(url,{headers:{accept:"application/json"},cache:"no-store",signal:controller.signal});if(!response.ok)throw Error("TML HTTP "+response.status);return await response.json()}
+    finally{clearTimeout(timeout)}
+   };
+   const organizations=await discoverFertagus(fetchJson);
+   const results=await Promise.allSettled(organizations.map(o=>fetchJson(o.positionsUrl)));
+   const positions=results.flatMap(result=>result.status==="fulfilled"?(Array.isArray(result.value?.data)?result.value.data:[]):[]);
+   if(!results.some(result=>result.status==="fulfilled"))return;
+   const fresh=normalizeFertagusPositions(positions);
+   layer.clearLayers();
+   fresh.forEach(t=>{
+    const marker=L.circleMarker([t.latitude,t.longitude],{radius:9,color:"#155e75",weight:2,fillColor:"#06b6d4",fillOpacity:.9}).addTo(layer);
+    const time=new Date(t.positionTimestamp).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"});
+    marker.bindTooltip("🚆 FT "+t.vehicleId+" · GPS "+time);
+    marker.on("click",()=>setSel({...t,trainNumber:t.vehicleId,source:"TML · GPS Fertagus"}));
+   });
+  }catch(error){console.warn("Fertagus GPS indisponível:",error)}
+ }
  async function load(){
   setLoading(true);
   try{
@@ -107,7 +133,7 @@ function App(){
    setStatus(`Fonte indisponível · ${msg}`)
   } finally { setLoading(false); }
  }
- useEffect(()=>{load();let i=setInterval(load,30000);return()=>clearInterval(i)},[]);
+ useEffect(()=>{load();loadFertagus();let i=setInterval(()=>{load();loadFertagus()},30000);return()=>clearInterval(i)},[]);
  useEffect(()=>{const i=setInterval(()=>setClock(new Date()),30000);return()=>clearInterval(i)},[]);
  useEffect(()=>{if(!sel)return;const fresh=trains.find(t=>String(t.trainNumber??t.id)===String(sel.trainNumber??sel.id));if(fresh&&fresh!==sel)setSel(fresh)},[trains]);
  async function addAlert(){
