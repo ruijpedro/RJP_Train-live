@@ -1,4 +1,4 @@
-// GO Hub v1 (TML) — discovery only. No production feed is enabled until verified.
+// GO Hub v1 (TML) — validated read-only source. Map integration requires CORS/proxy verification.
 // Documentation: https://go.tmlmobilidade.pt/reference/hub/v1/vehicles
 export const TML_BASE = "https://go.tmlmobilidade.pt/hub/api";
 export const FERTAGUS_AGENCY_ID = "7NTB1";
@@ -11,7 +11,8 @@ export function normalizeFertagusPositions(positions, now=Date.now(), maxAgeMs=1
   return positions.filter(p => {
     if (p?.agency_id !== FERTAGUS_AGENCY_ID) return false;
     const lat=Number(p.latitude), lon=Number(p.longitude);
-    const stamp=Number(p.created_at ?? p.received_at);
+    const rawStamp=p.received_at ?? p.created_at;
+    const stamp=typeof rawStamp==="string" && !/^\d+(?:\.\d+)?$/.test(rawStamp)?Date.parse(rawStamp):Number(rawStamp)* (Number(rawStamp)<1e11?1000:1);
     return Number.isFinite(lat) && lat>=-90 && lat<=90 &&
       Number.isFinite(lon) && lon>=-180 && lon<=180 &&
       Number.isFinite(stamp) && stamp<=now+10000 && now-stamp<=maxAgeMs;
@@ -19,7 +20,7 @@ export function normalizeFertagusPositions(positions, now=Date.now(), maxAgeMs=1
     id:"FT:"+String(p.vehicle_id), vehicleId:String(p.vehicle_id),
     tripId:p.trip_id||null, service:"FT", type:"FT",
     latitude:Number(p.latitude), longitude:Number(p.longitude),
-    positionTimestamp:Number(p.created_at ?? p.received_at),
+    positionTimestamp:(()=>{const v=p.received_at??p.created_at;return typeof v==="string"&&!/^\d+(?:\.\d+)?$/.test(v)?Date.parse(v):Number(v)*(Number(v)<1e11?1000:1)})(),
     positionSource:"TML GO Hub", positionKind:"gps"
   }));
 }
