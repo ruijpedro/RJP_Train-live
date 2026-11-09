@@ -1,0 +1,52 @@
+// GO Hub v1 (TML) — discovery only. No production feed is enabled until verified.
+// Documentation: https://go.tmlmobilidade.pt/reference/hub/v1/vehicles
+export const TML_BASE = "https://go.tmlmobilidade.pt/hub/api";
+export const FERTAGUS_AGENCY_ID = "7NTB1";
+export function findFertagusOrganizations(organizations) {
+  return (Array.isArray(organizations) ? organizations : []).filter(o =>
+    Array.isArray(o.agency_ids) && o.agency_ids.includes(FERTAGUS_AGENCY_ID));
+}
+export function normalizeFertagusPositions(positions, now=Date.now(), maxAgeMs=120000) {
+  if (!Array.isArray(positions)) return [];
+  return positions.filter(p => {
+    if (p?.agency_id !== FERTAGUS_AGENCY_ID) return false;
+    const lat=Number(p.latitude), lon=Number(p.longitude);
+    const stamp=Number(p.created_at ?? p.received_at);
+    return Number.isFinite(lat) && lat>=-90 && lat<=90 &&
+      Number.isFinite(lon) && lon>=-180 && lon<=180 &&
+      Number.isFinite(stamp) && stamp<=now+10000 && now-stamp<=maxAgeMs;
+  }).map(p => ({
+    id:"FT:"+String(p.vehicle_id), vehicleId:String(p.vehicle_id),
+    tripId:p.trip_id||null, service:"FT", type:"FT",
+    latitude:Number(p.latitude), longitude:Number(p.longitude),
+    positionTimestamp:Number(p.created_at ?? p.received_at),
+    positionSource:"TML GO Hub", positionKind:"gps"
+  }));
+}
+export async function discoverFertagus(fetchJson) {
+  const [organizations, agencies]=await Promise.all([fetchJson(TML_BASE+"/v1/organizations"),fetchJson(TML_BASE+"/v1/agencies")]);
+  const matching=findFertagusOrganizations(organizations?.data);
+  const results=[];
+  for(const organization of matching) {
+    const agency=(agencies?.data||[]).find(a=>a._id===FERTAGUS_AGENCY_ID);
+    const positionsEnabled=agency?.services?.positions_enabled===true;
+    results.push({organizationId:organization._id,positionsEnabled,positionsUrl:TML_BASE+"/v1/"+encodeURIComponent(organization._id)+"/vehicles/positions"});
+  }
+  return results;
+}
+
+// Fetch once for diagnostics. Never use cached or estimated positions as live GPS.
+export async function probeFertagusPositions(fetchJson, now=Date.now()) {
+ const organizations=await discoverFertagus(fetchJson);
+ const diagnostics=[];
+ for(const org of organizations) {
+  if(!org.positionsEnabled){diagnostics.push({...org,status:"not-published",count:0});continue}
+  try {
+   const response=await fetchJson(org.positionsUrl);
+   if(!Array.isArray(response?.data))throw Error("Unexpected TML response");
+   const positions=normalizeFertagusPositions(response.data,now);
+   diagnostics.push({...org,status:positions.length?"gps-available":"no-fresh-gps",count:positions.length,positions});
+  }catch(e){diagnostics.push({...org,status:"request-failed",error:String(e?.message||e),count:0})}
+ }
+ return diagnostics;
+}
