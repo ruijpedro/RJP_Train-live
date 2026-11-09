@@ -101,7 +101,7 @@ function App(){
    const fresh=normalizeFertagusPositions(positions);
    layer.clearLayers();
    fresh.forEach(t=>{
-    const marker=L.circleMarker([t.latitude,t.longitude],{radius:9,color:"#155e75",weight:2,fillColor:"#06b6d4",fillOpacity:.9}).addTo(layer);
+    const marker=L.marker([t.latitude,t.longitude],{icon:L.divIcon({className:"rjp-ft-marker",html:'<span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#06b6d4;border:2px solid #155e75;color:#052f40;font:bold 13px Arial,sans-serif;box-shadow:0 2px 6px #0006">FT</span>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(layer);
     const time=new Date(t.positionTimestamp).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"});
     marker.bindTooltip("🚆 FT "+t.vehicleId+" · GPS "+time);
     marker.on("click",()=>setSel({...t,trainNumber:t.vehicleId,source:"TML · GPS Fertagus"}));
