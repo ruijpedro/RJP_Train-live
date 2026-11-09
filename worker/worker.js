@@ -150,12 +150,23 @@ export default {
     try{const response=await fetch(upstream,{headers:{Accept:'application/json'},signal:controller.signal});if(!response.ok)throw Error('TML HTTP '+response.status);payload=await response.json()}finally{clearTimeout(timer)}
     const rows=Array.isArray(payload?.data)?payload.data:Array.isArray(payload)?payload:[];
     const now=Date.now();
-    const positions=rows.filter(p=>{
-     if(p.agency_id!=='7NTB1')return false;
-     const stamp=Date.parse(p.received_at||p.created_at);
-     return Number.isFinite(stamp)&&stamp<=now+10000&&now-stamp<=120000&&Number.isFinite(Number(p.latitude))&&Number.isFinite(Number(p.longitude));
+    // GO Hub timestamps are Unix milliseconds, not ISO date strings.
+    const toMillis=value=>{
+     if(value==null||value==='')return NaN;
+     if(typeof value==='string'&&!/^\\d+(?:\\.\\d+)?$/.test(value))return Date.parse(value);
+     const numeric=Number(value);
+     return Number.isFinite(numeric)?numeric*(numeric<1e11?1000:1):NaN;
+    };
+    const fertagus=rows.filter(p=>String(p?.agency_id)==='7NTB1');
+    const positions=fertagus.filter(p=>{
+     const stamp=toMillis(p.received_at??p.created_at);
+     const lat=Number(p.latitude),lon=Number(p.longitude);
+     return Number.isFinite(stamp)&&stamp<=now+10000&&now-stamp<=120000&&
+      Number.isFinite(lat)&&lat>=35&&lat<=43&&Number.isFinite(lon)&&lon>=-11&&lon<=-5;
     });
-    return json({ok:true,source:'TML GO Hub',checkedAt:new Date().toISOString(),positions});
+    return json({ok:true,source:'TML GO Hub',checkedAt:new Date().toISOString(),
+     diagnostics:{totalPositions:rows.length,fertagusPositions:fertagus.length,freshFertagusPositions:positions.length},
+     positions});
    }catch(e){return json({ok:false,error:String(e?.message||e),positions:[]},502)}
   }
   if(u.pathname==='/api/trains/active'&&request.method==='GET'){
