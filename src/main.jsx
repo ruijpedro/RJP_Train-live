@@ -94,10 +94,17 @@ function App(){
     try{const response=await fetch(url,{headers:{accept:"application/json"},cache:"no-store",signal:controller.signal});if(!response.ok)throw Error("TML HTTP "+response.status);return await response.json()}
     finally{clearTimeout(timeout)}
    };
-   const organizations=await discoverFertagus(fetchJson);
-   const results=await Promise.allSettled(organizations.map(o=>fetchJson(o.positionsUrl)));
-   const positions=results.flatMap(result=>result.status==="fulfilled"?(Array.isArray(result.value?.data)?result.value.data:[]):[]);
-   if(!results.some(result=>result.status==="fulfilled"))return;
+   let positions=null;
+   try{
+    const proxied=await fetchJson(LOCAL_API+"/fertagus/positions");
+    if(proxied?.ok&&Array.isArray(proxied.positions))positions=proxied.positions;
+   }catch(error){console.warn("Proxy Fertagus ainda indisponível:",error)}
+   if(!positions){
+    const organizations=await discoverFertagus(fetchJson);
+    const results=await Promise.allSettled(organizations.map(o=>fetchJson(o.positionsUrl)));
+    if(!results.some(result=>result.status==="fulfilled"))return;
+    positions=results.flatMap(result=>result.status==="fulfilled"?(Array.isArray(result.value?.data)?result.value.data:[]):[]);
+   }
    const fresh=normalizeFertagusPositions(positions);
    layer.clearLayers();
    fresh.forEach(t=>{
@@ -138,7 +145,7 @@ function App(){
    }catch(e){
    console.error("RJP Train Live feed error:",e);
    const msg=e instanceof TypeError?"CORS/rede":(e?.message||"erro");
-   setStatus(`Fonte indisponível · ${msg}`)
+   setStatus(`CP indisponível · ${msg}`)
   } finally { setLoading(false); }
  }
  useEffect(()=>{load();loadFertagus();let i=setInterval(()=>{load();loadFertagus()},30000);return()=>clearInterval(i)},[]);
