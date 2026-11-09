@@ -147,9 +147,13 @@ export default {
   if(u.pathname.startsWith('/api/cp/')&&request.method==='GET'){
    const cpKey=env.CP_TRAVEL_API_KEY,cpId=env.CP_CONNECT_ID,cpSecret=env.CP_CONNECT_SECRET;
    if(!cpKey||!cpId||!cpSecret)return json({ok:false,source:'CP Travel API',available:false,reason:'not-configured',note:'Requer acesso autorizado aos servicos da CP'},503);
-   const match=u.pathname.match(/^\\/api\\/cp\\/(stations|trains\\/([0-9]{1,6})\\/timetable\\/([0-9]{4}-[0-9]{2}-[0-9]{2})|stations\\/([0-9A-Za-z-]{1,40})\\/timetable\\/([0-9]{4}-[0-9]{2}-[0-9]{2}))$/);
-   if(!match)return json({ok:false,error:'Consulta CP nao suportada'},400);
-   const path=match[1];
+   const parts=u.pathname.split('/').filter(Boolean);
+   const validDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'');
+   const isStations=parts.length===3&&parts[2]==='stations';
+   const isTrain=parts.length===6&&parts[2]==='trains'&&/^\d{1,6}$/.test(parts[3])&&parts[4]==='timetable'&&validDate(parts[5]);
+   const isBoard=parts.length===6&&parts[2]==='stations'&&/^[a-zA-Z0-9-]{1,40}$/.test(parts[3])&&parts[4]==='timetable'&&validDate(parts[5]);
+   if(!(isStations||isTrain||isBoard))return json({ok:false,error:'Consulta CP nao suportada'},400);
+   const path=parts.slice(2).join('/');
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
    try{
     const upstream=await fetch('https://api-gateway.cp.pt/cp/services/travel-api/'+path,{
