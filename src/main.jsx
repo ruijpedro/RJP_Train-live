@@ -111,20 +111,28 @@ function App(){
  async function load(){
   setLoading(true);
   try{
-   let j,a,primary;
-   if(LOCAL_API){
-     let r=await fetch(`${LOCAL_API}/trains/active`);if(!r.ok)throw Error(r.status);j=await r.json();
-     const raw=Array.isArray(j)?j:(j.data||j.trains||[]);
-     // The Cloudflare Worker returns the original Comboios Live schema.
-     // Normalize it here so the map always receives top-level coordinates.
-     a=raw.map(x=>(x?.data?.status||x?.fixed||x?.db)?directTrain(x):x);
-     primary=j?.primary||"RJP API · Comboios Live";
-   }else{
-     let r=await fetch(RUI_FEED,{headers:{accept:"application/json"}});if(!r.ok)throw Error(r.status);j=await r.json();
-     a=(Array.isArray(j)?j:(j.data||j.trains||[])).map(directTrain);primary="Comboios Live";
+   let a=[],primary="",errors=[];
+   // Try the existing Worker first, then the original CP feed independently.
+   // A failed Worker must never hide CP trains from the map.
+   const feeds=[
+    {name:"RJP API · Comboios Live",url:LOCAL_API+"/trains/active"},
+    {name:"Comboios Live · Rui Costa",url:RUI_FEED}
+   ];
+   for(const feed of feeds){
+    try{
+     const response=await fetch(feed.url,{headers:{accept:"application/json"},cache:"no-store"});
+     if(!response.ok)throw Error("HTTP "+response.status);
+     const payload=await response.json();
+     const raw=Array.isArray(payload)?payload:(Array.isArray(payload?.data)?payload.data:Array.isArray(payload?.trains)?payload.trains:[]);
+     if(!raw.length)throw Error("sem comboios na resposta");
+     const normalized=raw.map(x=>(x?.data?.status||x?.fixed||x?.db)?directTrain(x):x);
+     if(!normalized.some(t=>t.latitude!=null&&t.longitude!=null&&Number.isFinite(Number(t.latitude))&&Number.isFinite(Number(t.longitude))))throw Error("sem coordenadas CP");
+     a=normalized;primary=feed.name;break;
+    }catch(error){errors.push(feed.name+": "+String(error?.message||error))}
    }
+   if(!a.length)throw Error(errors.join(" | "));
    setTrains(a);dispatchAlerts(a,getSavedAlerts(),new Date(),sendAlert);setUpdated(new Date());setStatus(`Online · ${primary}`);
-   let g=layers.current.tr;g.clearLayers();a.forEach(t=>{let lat=+(t.latitude??t.lat),lon=+(t.longitude??t.lng??t.lon);if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
+   let g=layers.current.tr;g.clearLayers();a.forEach(t=>{let rawLat=t.latitude??t.lat,rawLon=t.longitude??t.lng??t.lon;if(rawLat==null||rawLon==null)return;let lat=Number(rawLat),lon=Number(rawLon);if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat<35||lat>43||lon< -11||lon> -5)return;
     let d=+(t.delayMinutes??t.delay??0),mk=L.marker([lat,lon]).addTo(g);mk.bindTooltip(`🚆 ${n(t.trainNumber??t.number??t.id)} ${d>0?`+${d} min`:""}`);mk.on("click",()=>setSel(t));
    })
    }catch(e){
