@@ -1,0 +1,29 @@
+name: Diagnosticar fonte oficial CP
+on:
+  workflow_dispatch:
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar acessibilidade dos serviços oficiais CP
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import urllib.request, urllib.error, json, time
+          urls = {
+            "CP site oficial": "https://www.cp.pt/pt",
+            "CP informacao tempo real": "https://www.cp.pt/info/w/tempo-real",
+            "CP horarios": "https://www.cp.pt/info/w/horarios-comboios",
+          }
+          for name, url in urls.items():
+              try:
+                  req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 (compatible; RJPTrainLiveDiagnostics/1.0)","Accept":"text/html"})
+                  with urllib.request.urlopen(req,timeout=15) as resp:
+                      body=resp.read(8192)
+                      print(json.dumps({"fonte":name,"http":resp.status,"content_type":resp.headers.get("Content-Type"),"amostra_bytes":len(body),"url_final":resp.url},ensure_ascii=False))
+              except urllib.error.HTTPError as e:
+                  print(json.dumps({"fonte":name,"http":e.code,"erro":"HTTP"},ensure_ascii=False))
+              except Exception as e:
+                  print(json.dumps({"fonte":name,"erro":type(e).__name__,"detalhe":str(e)[:120]},ensure_ascii=False))
+          print("NOTA: HTTP 200 numa pagina nao comprova API de posicoes GPS nem autorizacao de reutilizacao.")
+          PY
