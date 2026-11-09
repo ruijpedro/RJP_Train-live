@@ -2,12 +2,14 @@
 const BASE="https://go.tmlmobilidade.pt/hub/api/v1";
 const fetchJson=async url=>{
  const c=new AbortController(),t=setTimeout(()=>c.abort(),15000);
- try{const r=await fetch(url,{headers:{accept:"application/json"},signal:c.signal});if(!r.ok)throw Error("HTTP "+r.status);return await r.json()}finally{clearTimeout(t)}
+ try{const r=await fetch(url,{headers:{accept:"application/json"},signal:c.signal});if(!r.ok)throw Error("HTTP "+r.status+" at "+url);return await r.json()}finally{clearTimeout(t)}
 };
 const asRows=x=>Array.isArray(x?.data)?x.data:Array.isArray(x)?x:[];
 const output={checkedAt:new Date().toISOString(),agencyId:"7NTB1",organizations:[],agency:null,probes:[]};
 try{
- const [organizations,agencies]=await Promise.all([fetchJson(BASE+"/organizations"),fetchJson(BASE+"/agencies")]);
+ const organizations=await fetchJson(BASE+"/organizations");
+ let agencies;
+ try{agencies=await fetchJson(BASE+"/agencies")}catch(e){output.agencyDiscoveryError=String(e?.message||e);agencies={data:[]}}
  output.organizations=asRows(organizations).filter(o=>(o.agency_ids||[]).includes("7NTB1")).map(o=>({id:o._id,fields:Object.keys(o)}));
  const agency=asRows(agencies).find(a=>a._id==="7NTB1");
  output.agency=agency?{fields:Object.keys(agency),services:agency.services??null,openDataServices:agency.open_data?.services??null}:null;
