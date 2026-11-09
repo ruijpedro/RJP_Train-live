@@ -1,48 +1,24 @@
-import { probeFertagusPositions } from "../src/fertagus-tml.js";
+// TML independent GPS diagnostic. Read-only; does not publish positions.
+const BASE="https://go.tmlmobilidade.pt/hub/api/v1";
 const fetchJson=async url=>{
- const controller=new AbortController();
- const timer=setTimeout(()=>controller.abort(),15000);
- try{
-  const res=await fetch(url,{headers:{accept:"application/json"},signal:controller.signal});
-  if(!res.ok)throw Error("HTTP "+res.status+" "+url);
-  return await res.json();
- }finally{clearTimeout(timer)}
+ const c=new AbortController(),t=setTimeout(()=>c.abort(),15000);
+ try{const r=await fetch(url,{headers:{accept:"application/json"},signal:c.signal});if(!r.ok)throw Error("HTTP "+r.status);return await r.json()}finally{clearTimeout(t)}
 };
+const asRows=x=>Array.isArray(x?.data)?x.data:Array.isArray(x)?x:[];
+const output={checkedAt:new Date().toISOString(),agencyId:"7NTB1",organizations:[],agency:null,probes:[]};
 try{
- const result=await probeFertagusPositions(fetchJson);
- const summary=result.map(({organizationId,positionsEnabled,status,count,error})=>({organizationId,positionsEnabled,status,count,error}));
- console.log(JSON.stringify({checkedAt:new Date().toISOString(),organizations:summary},null,2));
- if(!result.length)console.log("No Fertagus organization identified. Check TML schema before enabling.");
- if(result.some(x=>x.status==="gps-available"))console.log("Fresh Fertagus GPS found. Manual validation still required.");
-}catch(e){console.error("TML diagnostic failed:",e);process.exitCode=1}
-
-
-// Independent schema inspection: show field names only, not full payloads or secrets.
-try {
- const base="https://go.tmlmobilidade.pt/hub/api/v1";
- const orgs=await fetchJson(base+"/organizations");
- const org=(orgs?.data||[]).find(o=>(o.agency_ids||[]).includes("7NTB1"));
- if(org){
-  const endpoint=base+"/"+encodeURIComponent(org._id)+"/agencies";
-  const data=await fetchJson(endpoint);
-  const agency=(data?.data||[]).find(a=>a._id==="7NTB1");
-  console.log("Fertagus agency schema:",JSON.stringify({
-    organizationId:org._id,
-    found:!!agency,
-    fields:agency?Object.keys(agency):[],
-    services:agency?.services??null,
-    openDataServices:agency?.open_data?.services??null,
-    openDataKeys:agency?.open_data?Object.keys(agency.open_data):[]
-  },null,2));
-  const posUrl=base+"/"+encodeURIComponent(org._id)+"/vehicles/positions";
-  try {
-    const positions=await fetchJson(posUrl);
-    const rows=Array.isArray(positions?.data)?positions.data:[];
-    console.log("TML positions endpoint:",JSON.stringify({
-      http:"ok",records:rows.length,
-      fertagusRecords:rows.filter(x=>x.agency_id==="7NTB1").length,
-      sampleFields:rows.length?Object.keys(rows[0]):[]
-    }));
-  }catch(error){console.log("TML positions endpoint error:",String(error?.message||error))}
+ const [organizations,agencies]=await Promise.all([fetchJson(BASE+"/organizations"),fetchJson(BASE+"/agencies")]);
+ output.organizations=asRows(organizations).filter(o=>(o.agency_ids||[]).includes("7NTB1")).map(o=>({id:o._id,fields:Object.keys(o)}));
+ const agency=asRows(agencies).find(a=>a._id==="7NTB1");
+ output.agency=agency?{fields:Object.keys(agency),services:agency.services??null,openDataServices:agency.open_data?.services??null}:null;
+ for(const org of output.organizations){
+  const url=BASE+"/"+encodeURIComponent(org.id)+"/vehicles/positions";
+  try{
+   const payload=await fetchJson(url),rows=asRows(payload);
+   const ft=rows.filter(v=>v.agency_id==="7NTB1");
+   output.probes.push({organizationId:org.id,status:"ok",totalRecords:rows.length,fertagusRecords:ft.length,sampleFields:rows[0]?Object.keys(rows[0]):[],fertagusSampleFields:ft[0]?Object.keys(ft[0]):[]});
+  }catch(e){output.probes.push({organizationId:org.id,status:"error",error:String(e?.message||e)})}
  }
-}catch(error){console.log("Schema inspection error:",String(error?.message||error))}
+ console.log(JSON.stringify(output,null,2));
+ if(!output.organizations.length)process.exitCode=2;
+}catch(e){console.error("TML discovery failed:",String(e?.message||e));process.exitCode=1}
