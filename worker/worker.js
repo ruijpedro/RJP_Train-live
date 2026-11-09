@@ -159,7 +159,13 @@ export default {
    }catch(e){return json({ok:false,error:String(e?.message||e),positions:[]},502)}
   }
   if(u.pathname==='/api/trains/active'&&request.method==='GET'){
-   try{const r=await fetch(FEED,{headers:{Accept:'application/json'}});if(!r.ok)return json({error:'Fonte indisponível'},502);return new Response(r.body,{status:200,headers:{...cors,'Content-Type':'application/json','Cache-Control':'public,max-age=30'}})}catch{return json({error:'Fonte indisponível'},502)}
+   try{
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+    let r;
+    try{r=await fetch(FEED,{headers:{Accept:'application/json','User-Agent':'RJP-Train-Live/2.12'},signal:controller.signal})}finally{clearTimeout(timer)}
+    if(!r.ok)return json({ok:false,error:'Fonte CP indisponível',upstreamStatus:r.status,source:'Comboios Live'},502);
+    return new Response(r.body,{status:200,headers:{...cors,'Content-Type':'application/json','Cache-Control':'public,max-age=30'}});
+   }catch(e){return json({ok:false,error:'Falha na ligação à fonte CP',reason:e?.name==='AbortError'?'timeout':String(e?.message||e).slice(0,160),source:'Comboios Live'},502)}
   }
   if(['/api/push/register','/api/push/rules','/api/push/test'].includes(u.pathname)&&request.method==='POST'){
    if(!env.DB)return json({error:'D1 não configurado'},503);
