@@ -142,6 +142,22 @@ export default {
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
   const u=new URL(request.url);
   if(u.pathname==='/'||u.pathname==='/health')return json({ok:true,service:'RJP Train Live API',version:'2.9.1',source:'Comboios Live — Rui Costa'});
+  if(u.pathname==='/api/fertagus/positions'&&request.method==='GET'){
+   try{
+    const upstream='https://go.tmlmobilidade.pt/hub/api/v1/0XJC9/vehicles/positions';
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+    let payload;
+    try{const response=await fetch(upstream,{headers:{Accept:'application/json'},signal:controller.signal});if(!response.ok)throw Error('TML HTTP '+response.status);payload=await response.json()}finally{clearTimeout(timer)}
+    const rows=Array.isArray(payload?.data)?payload.data:Array.isArray(payload)?payload:[];
+    const now=Date.now();
+    const positions=rows.filter(p=>{
+     if(p.agency_id!=='7NTB1')return false;
+     const stamp=Date.parse(p.received_at||p.created_at);
+     return Number.isFinite(stamp)&&stamp<=now+10000&&now-stamp<=120000&&Number.isFinite(Number(p.latitude))&&Number.isFinite(Number(p.longitude));
+    });
+    return json({ok:true,source:'TML GO Hub',checkedAt:new Date().toISOString(),positions});
+   }catch(e){return json({ok:false,error:String(e?.message||e),positions:[]},502)}
+  }
   if(u.pathname==='/api/trains/active'&&request.method==='GET'){
    try{const r=await fetch(FEED,{headers:{Accept:'application/json'}});if(!r.ok)return json({error:'Fonte indisponível'},502);return new Response(r.body,{status:200,headers:{...cors,'Content-Type':'application/json','Cache-Control':'public,max-age=30'}})}catch{return json({error:'Fonte indisponível'},502)}
   }
