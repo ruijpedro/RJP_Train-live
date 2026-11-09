@@ -27,6 +27,16 @@ jobs:
                     if absolute not in candidates:candidates.append(absolute)
                 print(json.dumps({"pagina":name,"recursos_candidatos":candidates[:35]},ensure_ascii=False))
                 print(json.dumps({"pagina":name,"marcadores":{term:term.lower() in body.lower() for term in ["fetch(","XMLHttpRequest","graphql","api/","próximos comboios","next trains"]}},ensure_ascii=False))
+                if name=="CP tempo real":
+                  for token in ["fetch(", "api/"]:
+                    hits=list(re.finditer(re.escape(token),body,re.I))
+                    snippets=[]
+                    for hit in hits[:12]:
+                      fragment=re.sub(r"\\s+"," ",body[max(0,hit.start()-160):min(len(body),hit.end()+240)])
+                      fragment=re.sub(r"(?i)(token|apikey|api_key|authorization|password|secret)([=:]\\s*['\\\"]?)[^'\\\"&\\s<>]+",r"\\1\\2[REDACTED]",fragment)
+                      snippets.append(fragment[:380])
+                    print(json.dumps({"pagina":name,"token":token,"ocorrencias":len(hits),"contextos":snippets},ensure_ascii=False))
+
             except Exception as e:print(json.dumps({"pagina":name,"erro":str(e)[:180]},ensure_ascii=False))
           print("DIAGNOSTICO APENAS: nao prova que exista API publica nem acesso autorizado a GPS.")
           PY
