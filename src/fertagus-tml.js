@@ -24,14 +24,12 @@ export function normalizeFertagusPositions(positions, now=Date.now(), maxAgeMs=1
   }));
 }
 export async function discoverFertagus(fetchJson) {
-  const organizations=await fetchJson(TML_BASE+"/v1/organizations");
+  const [organizations, agencies]=await Promise.all([fetchJson(TML_BASE+"/v1/organizations"),fetchJson(TML_BASE+"/v1/agencies")]);
   const matching=findFertagusOrganizations(organizations?.data);
   const results=[];
   for(const organization of matching) {
-    const url=TML_BASE+"/v1/"+encodeURIComponent(organization._id)+"/agencies";
-    const response=await fetchJson(url);
-    const agency=(response?.data||[]).find(a=>a._id===FERTAGUS_AGENCY_ID);
-    const positionsEnabled=agency?.open_data?.services?.positions_enabled===true;
+    const agency=(agencies?.data||[]).find(a=>a._id===FERTAGUS_AGENCY_ID);
+    const positionsEnabled=agency?.services?.positions_enabled===true;
     results.push({organizationId:organization._id,positionsEnabled,positionsUrl:TML_BASE+"/v1/"+encodeURIComponent(organization._id)+"/vehicles/positions"});
   }
   return results;
