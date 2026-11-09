@@ -31,7 +31,24 @@ export async function discoverFertagus(fetchJson) {
     const url=TML_BASE+"/v1/"+encodeURIComponent(organization._id)+"/agencies";
     const response=await fetchJson(url);
     const agency=(response?.data||[]).find(a=>a._id===FERTAGUS_AGENCY_ID);
-    results.push({organizationId:organization._id,positionsEnabled:agency?.services?.positions_enabled===true});
+    const positionsEnabled=agency?.services?.positions_enabled===true;
+    results.push({organizationId:organization._id,positionsEnabled,positionsUrl:TML_BASE+"/v1/"+encodeURIComponent(organization._id)+"/vehicles/positions"});
   }
   return results;
+}
+
+// Fetch once for diagnostics. Never use cached or estimated positions as live GPS.
+export async function probeFertagusPositions(fetchJson, now=Date.now()) {
+ const organizations=await discoverFertagus(fetchJson);
+ const diagnostics=[];
+ for(const org of organizations) {
+  if(!org.positionsEnabled){diagnostics.push({...org,status:"not-published",count:0});continue}
+  try {
+   const response=await fetchJson(org.positionsUrl);
+   if(!Array.isArray(response?.data))throw Error("Unexpected TML response");
+   const positions=normalizeFertagusPositions(response.data,now);
+   diagnostics.push({...org,status:positions.length?"gps-available":"no-fresh-gps",count:positions.length,positions});
+  }catch(e){diagnostics.push({...org,status:"request-failed",error:String(e?.message||e),count:0})}
+ }
+ return diagnostics;
 }
