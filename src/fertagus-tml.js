@@ -24,13 +24,23 @@ export function normalizeFertagusPositions(positions, now=Date.now(), maxAgeMs=1
   }));
 }
 export async function discoverFertagus(fetchJson) {
-  const [organizations, agencies]=await Promise.all([fetchJson(TML_BASE+"/v1/organizations"),fetchJson(TML_BASE+"/v1/agencies")]);
+  const organizations=await fetchJson(TML_BASE+"/v1/organizations");
   const matching=findFertagusOrganizations(organizations?.data);
   const results=[];
   for(const organization of matching) {
-    const agency=(agencies?.data||[]).find(a=>a._id===FERTAGUS_AGENCY_ID);
-    const positionsEnabled=agency?.services?.positions_enabled===true;
-    results.push({organizationId:organization._id,positionsEnabled,positionsUrl:TML_BASE+"/v1/"+encodeURIComponent(organization._id)+"/vehicles/positions"});
+    const organizationId=organization._id;
+    const agencyUrl=TML_BASE+"/v1/"+encodeURIComponent(organizationId)+"/agencies";
+    try {
+      const response=await fetchJson(agencyUrl);
+      const agency=(response?.data||[]).find(a=>a._id===FERTAGUS_AGENCY_ID);
+      results.push({
+        organizationId,
+        positionsEnabled:agency?.open_data?.services?.positions_enabled===true,
+        positionsUrl:TML_BASE+"/v1/"+encodeURIComponent(organizationId)+"/vehicles/positions"
+      });
+    }catch(error){
+      results.push({organizationId,positionsEnabled:false,status:"agency-request-failed",error:String(error?.message||error)});
+    }
   }
   return results;
 }
@@ -40,7 +50,7 @@ export async function probeFertagusPositions(fetchJson, now=Date.now()) {
  const organizations=await discoverFertagus(fetchJson);
  const diagnostics=[];
  for(const org of organizations) {
-  if(!org.positionsEnabled){diagnostics.push({...org,status:"not-published",count:0});continue}
+  if(!org.positionsEnabled){diagnostics.push({...org,status:org.status||"not-published",count:0});continue}
   try {
    const response=await fetchJson(org.positionsUrl);
    if(!Array.isArray(response?.data))throw Error("Unexpected TML response");
