@@ -82,3 +82,11 @@ main{position:relative}
 
 /* V2.10: route status and ETA countdown, display only. */
 .etaCountdown{color:#f4d68a;font-weight:700}.etaStop{align-items:center}.etaStop small{grid-column:1/-1}
+
+/* Service filters: horizontal scrolling on mobile, persistent choices */
+.trainTypeFilters{grid-column:1/-1;display:flex;gap:7px;overflow-x:auto;padding:9px 14px;background:#0e2034;scrollbar-width:thin;align-items:center}
+.trainTypeFilters button{flex:0 0 auto;min-width:44px;padding:8px 11px;border:1px solid #48617b;border-radius:9px;font-weight:700;font-size:13px}
+.trainTypeFilters .typeActive{background:#1684d7;color:#fff;border-color:#67b9f3}
+.trainTypeFilters .typeInactive{background:#142337;color:#a9b7c7;opacity:.7}
+main{grid-template-rows:72px 52px auto 65px minmax(280px,1fr) 30px}
+@media(max-width:800px){main{grid-template-rows:auto auto auto auto minmax(340px,1fr) auto}}
