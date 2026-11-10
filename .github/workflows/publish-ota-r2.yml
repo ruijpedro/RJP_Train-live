@@ -94,16 +94,34 @@ jobs:
       - name: Confirmar download público e checksum
         env:
           OTA_VERSION: ${{ inputs.version }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
         run: |
           python3 - <<'PY'
           import json, hashlib, urllib.request
           m=json.load(open('ota-manifest-pending.json'))
-          req=urllib.request.Request(m['url'],headers={'Cache-Control':'no-cache'})
-          with urllib.request.urlopen(req,timeout=90) as response:
-            assert response.status==200, response.status
-            digest=hashlib.sha256(response.read()).hexdigest()
-          assert digest==m['checksum'], f'Checksum remota divergente: {digest}'
-          print('ZIP público verificado:',m['version'])
+          import os, subprocess, tempfile
+          from pathlib import Path
+          # Validate the exact object stored in R2, avoiding transient 403s from the public Worker.
+          with tempfile.TemporaryDirectory() as tmp:
+            target=Path(tmp)/'ota.zip'
+            env=os.environ.copy()
+            env['AWS_DEFAULT_REGION']='auto'
+            subprocess.run(['aws','s3','cp',f"s3://rjp-train-live-ota/rjp-train-live-ota-v{m['version']}.zip",str(target),'--endpoint-url',env['R2_ENDPOINT']],check=True,env=env)
+            digest=hashlib.sha256(target.read_bytes()).hexdigest()
+          assert digest==m['checksum'], f'Checksum R2 divergente: {digest}'
+          print('ZIP no R2 verificado:',m['version'])
+          # Public accessibility remains a separate check: a failed public download blocks publication.
+          try:
+            req=urllib.request.Request(m['url'],headers={'Cache-Control':'no-cache','User-Agent':'Mozilla/5.0 (compatible; RJP-OTA-Verification/1.0)','Accept':'application/zip,*/*'})
+            with urllib.request.urlopen(req,timeout=90) as response:
+              assert response.status==200, response.status
+              public_digest=hashlib.sha256(response.read()).hexdigest()
+            assert public_digest==m['checksum'], f'Checksum público divergente: {public_digest}'
+            print('ZIP público verificado:',m['version'])
+          except Exception as exc:
+            raise RuntimeError(f'Acesso público não verificado; manifesto não publicado: {exc}') from exc
           PY
       - name: Atualizar manifesto em main
         env:
