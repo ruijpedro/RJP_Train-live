@@ -2,5 +2,6 @@
   "appId": "pt.rjp.trainlive",
   "version": "2.12.34",
   "url": "https://github.com/ruijpedro/RJP_Train-live/releases/download/ota-v2.12.34/rjp-train-live-ota-2.12.34.zip",
-  "notes": "Atualização OTA 2.12.34 — filtros U, R, IR, IC, AP, SUD e FT; canal GitHub compatível"
+  "notes": "Atualização OTA 2.12.34 — filtros U, R, IR, IC, AP, SUD e FT; canal GitHub compatível",
+  "checksum": "80be336ed01f4963cc976f3104689d315a00ca1e362a38f5f12959be650a0dbb"
 }
