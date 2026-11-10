@@ -69,7 +69,7 @@ jobs:
             'notes':f'OTA {v} — identificação CP por cores U, R, IR, IC, AP, SUD e FT',
             'checksum':checksum
           }
-          pathlib.Path('ota/manifest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\\n')
+          pathlib.Path('ota/manifest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+chr(10))
           print('OTA checksum:',checksum)
           PY
           git config user.name "github-actions[bot]"
