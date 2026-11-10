@@ -90,3 +90,7 @@ main{position:relative}
 .trainTypeFilters .typeInactive{background:#142337;color:#a9b7c7;opacity:.7}
 main{grid-template-rows:72px 52px auto 65px minmax(280px,1fr) 30px}
 @media(max-width:800px){main{grid-template-rows:auto auto auto auto minmax(340px,1fr) auto}}
+
+/* Place map below the restored filter bar on both layouts. */
+#map{grid-row:5}aside{grid-row:5}
+@media(max-width:750px){main{grid-template-rows:auto auto auto auto minmax(340px,1fr) 220px}#map{grid-row:5}aside{grid-row:6}}
