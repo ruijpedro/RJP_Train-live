@@ -34,6 +34,19 @@ function directTrain(x){
  lastStation:stops[ix]?.station?.designation??lastCode,nextStop:next?.station?.designation??null,
  trainStops:stops,source:"Comboios Live / Rui Costa"}}
 
+const TRAIN_TYPES=['U','R','IR','IC','AP','SUD','FT'];
+function trainType(t){
+ if(t?.type==='FT'||t?.service==='FT')return 'FT';
+ const raw=String(t?.service?.designation??t?.service??'').trim().toUpperCase();
+ const code=String(t?.fixed?.trainService?.code??'').toUpperCase();
+ if(raw.includes('SUD')||raw.includes('SUREXPRESSO'))return 'SUD';
+ if(raw.includes('INTERREGIONAL')||raw==='IR')return 'IR';
+ if(raw.includes('INTERCIDADES')||raw==='IC')return 'IC';
+ if(raw.includes('ALFA PENDULAR')||raw==='AP')return 'AP';
+ if(raw.includes('URBANO')||raw.includes('SUBURBANO')||raw==='U')return 'U';
+ if(raw.includes('REGIONAL')||raw==='R')return 'R';
+ return ['U','R','IR','IC','AP','SUD'].includes(code)?code:'R';
+}
 const n=v=>v??"—";
 async function requestAlertPermission(){
  if(Capacitor.isNativePlatform()){
@@ -71,7 +84,7 @@ function App(){
  useEffect(()=>{confirmOtaReady().catch(console.warn)},[]);
  async function checkOta(){setOtaBusy(true);try{const candidate=await checkOtaUpdate();setOtaCandidate(candidate);setOtaState(candidate?`Atualização ${candidate.version} disponível.`:"Sem atualização OTA disponível.")}catch(e){setOtaState(`OTA: ${e.message}`)}finally{setOtaBusy(false)}}
  async function applyOta(){if(!otaCandidate)return;setOtaBusy(true);try{setOtaState("A descarregar atualização OTA…");await installOtaUpdate(otaCandidate);setOtaState("Atualização aplicada. A reiniciar…")}catch(e){setOtaState(`OTA falhou: ${e.message}`)}finally{setOtaBusy(false)}}
- const [scheduleType,setScheduleType]=useState("weekly"),[alertDate,setAlertDate]=useState(""),[monthDay,setMonthDay]=useState(1),[monthYear,setMonthYear]=useState(""); const [clock,setClock]=useState(()=>new Date()); const mapRef=useRef(),layers=useRef({}); const [alertDays,setAlertDays]=useState([0,1,2,3,4,5,6]),[notifyBefore,setNotifyBefore]=useState(true),[notifyOnArrival,setNotifyOnArrival]=useState(true),[alerts,setAlerts]=useState(getSavedAlerts),[alertOpen,setAlertOpen]=useState(false),[alertScope,setAlertScope]=useState("station"),[alertStation,setAlertStation]=useState(""),[alertTarget,setAlertTarget]=useState(""),[alertEvent,setAlertEvent]=useState("both"),[alertLead,setAlertLead]=useState(10),[alertMsg,setAlertMsg]=useState(""); const[trains,setTrains]=useState([]),[sel,setSel]=useState(),[q,setQ]=useState(""),[status,setStatus]=useState("A ligar…"),[updated,setUpdated]=useState(),[loading,setLoading]=useState(false);
+ const [scheduleType,setScheduleType]=useState("weekly"),[alertDate,setAlertDate]=useState(""),[monthDay,setMonthDay]=useState(1),[monthYear,setMonthYear]=useState(""); const [clock,setClock]=useState(()=>new Date()); const mapRef=useRef(),layers=useRef({}); const [alertDays,setAlertDays]=useState([0,1,2,3,4,5,6]),[notifyBefore,setNotifyBefore]=useState(true),[notifyOnArrival,setNotifyOnArrival]=useState(true),[alerts,setAlerts]=useState(getSavedAlerts),[alertOpen,setAlertOpen]=useState(false),[alertScope,setAlertScope]=useState("station"),[alertStation,setAlertStation]=useState(""),[alertTarget,setAlertTarget]=useState(""),[alertEvent,setAlertEvent]=useState("both"),[alertLead,setAlertLead]=useState(10),[alertMsg,setAlertMsg]=useState(""); const [enabledTypes,setEnabledTypes]=useState(()=>{try{const saved=JSON.parse(localStorage.getItem('rjp_train_types'));return Array.isArray(saved)?saved.filter(x=>TRAIN_TYPES.includes(x)):TRAIN_TYPES}catch{return TRAIN_TYPES}}); const[trains,setTrains]=useState([]),[sel,setSel]=useState(),[q,setQ]=useState(""),[status,setStatus]=useState("A ligar…"),[updated,setUpdated]=useState(),[loading,setLoading]=useState(false);
  useEffect(()=>{let m=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);mapRef.current=m;
  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",opacity:.72}).addTo(m);
  // Railway-first overlay: visible immediately when the app opens.
@@ -139,15 +152,27 @@ function App(){
    }
    if(!a.length)throw Error(errors.join(" | "));
    setTrains(a);dispatchAlerts(a,getSavedAlerts(),new Date(),sendAlert);setUpdated(new Date());setStatus(`Online · ${primary}`);
-   let g=layers.current.tr;g.clearLayers();a.forEach(t=>{let rawLat=t.latitude??t.lat,rawLon=t.longitude??t.lng??t.lon;if(rawLat==null||rawLon==null)return;let lat=Number(rawLat),lon=Number(rawLon);if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat<35||lat>43||lon< -11||lon> -5)return;
-    let d=+(t.delayMinutes??t.delay??0),mk=L.marker([lat,lon]).addTo(g);mk.bindTooltip(`🚆 ${n(t.trainNumber??t.number??t.id)} ${d>0?`+${d} min`:""}`);mk.on("click",()=>setSel(t));
-   })
+
    }catch(e){
    console.error("RJP Train Live feed error:",e);
    const msg=e instanceof TypeError?"CORS/rede":(e?.message||"erro");
    setStatus(`CP indisponível · ${msg}`)
   } finally { setLoading(false); }
  }
+ useEffect(()=>{
+  localStorage.setItem('rjp_train_types',JSON.stringify(enabledTypes));
+  const group=layers.current.tr;
+  if(group){group.clearLayers();trains.filter(t=>enabledTypes.includes(trainType(t))).forEach(t=>{
+   const lat=Number(t.latitude??t.lat),lon=Number(t.longitude??t.lng??t.lon);
+   if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat<35||lat>43||lon< -11||lon> -5)return;
+   const d=Number(t.delayMinutes??t.delay??0);
+   const mk=L.marker([lat,lon]).addTo(group);
+   mk.bindTooltip('🚆 '+trainType(t)+' '+n(t.trainNumber??t.number??t.id)+(d>0?' +'+d+' min':''));
+   mk.on('click',()=>setSel(t));
+  })}
+  const ft=layers.current.ft,m=mapRef.current;
+  if(ft&&m){if(enabledTypes.includes('FT')){if(!m.hasLayer(ft))ft.addTo(m)}else if(m.hasLayer(ft))m.removeLayer(ft)}
+ },[trains,enabledTypes]);
  useEffect(()=>{load();loadFertagus();let i=setInterval(()=>{load();loadFertagus()},30000);return()=>clearInterval(i)},[]);
  useEffect(()=>{const i=setInterval(()=>setClock(new Date()),30000);return()=>clearInterval(i)},[]);
  useEffect(()=>{if(!sel)return;const fresh=trains.find(t=>String(t.trainNumber??t.id)===String(sel.trainNumber??sel.id));if(fresh&&fresh!==sel)setSel(fresh)},[trains]);
@@ -172,9 +197,10 @@ function App(){
   }catch(e){console.error(e);setAlertMsg('Falha no teste de notificação.')} 
  }
 
- let filtered=trains.filter(t=>JSON.stringify(t).toLowerCase().includes(q.toLowerCase()));
+ let filtered=trains.filter(t=>enabledTypes.includes(trainType(t))&&JSON.stringify(t).toLowerCase().includes(q.toLowerCase()));
  return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2.12</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>CP: <b>Comboios Live — Rui Costa</b> · Fertagus: <b>TML GO Hub (GPS direto)</b></small></div></header>
  <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button className={loading?"refresh loading":"refresh"} onClick={load} disabled={loading}><span>↻</span>{loading?" A atualizar…":" Atualizar agora"}</button><button className="alertsButton" onClick={()=>setAlertOpen(v=>!v)}>🔔 Alertas ({alerts.length})</button><button onClick={checkOta} disabled={otaBusy}>⬇ Verificar OTA</button>{otaCandidate&&<button onClick={applyOta} disabled={otaBusy}>Instalar {otaCandidate.version}</button>}</nav>{otaState&&<p role="status" className="otaStatus">{otaState}</p>}
+ <div className="trainTypeFilters" role="group" aria-label="Filtrar tipos de comboio">{TRAIN_TYPES.map(type=><button key={type} type="button" className={enabledTypes.includes(type)?"typeActive":"typeInactive"} aria-pressed={enabledTypes.includes(type)} onClick={()=>setEnabledTypes(current=>current.includes(type)?current.filter(x=>x!==type):[...current,type])}>{type}</button>)}</div>
  <section className="stats"><div><b>{trains.length}</b><small>comboios recebidos</small></div><div><b>{trains.filter(t=>+(t.delayMinutes??t.delay??0)>0).length}</b><small>com atraso</small></div><div><b>{updated?updated.toLocaleTimeString("pt-PT"):"—"}</b><small>última atualização</small></div></section>
  {alertOpen&&<section className="alertsPanel"><div className="alertsHeading"><h2>🔔 Alertas ferroviários</h2><button onClick={()=>setAlertOpen(false)} aria-label="Fechar alertas">×</button></div>
  <p>Alertas de horários previstos, baseados na WebApp Comboios Live — Rui Costa. Com Firebase e o Worker configurados, os avisos push podem chegar mesmo com a aplicação fechada. Os horários são previstos, não confirmações de circulação.</p>
