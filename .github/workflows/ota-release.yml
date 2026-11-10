@@ -37,9 +37,43 @@ jobs:
           zip -q -r "../rjp-train-live-ota-${OTA_VERSION}.zip" .
           cd ..
           sha256sum "rjp-train-live-ota-${OTA_VERSION}.zip" > "rjp-train-live-ota-${OTA_VERSION}.sha256"
+      - name: Prevent overwriting an existing OTA version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OTA_VERSION: ${{ inputs.version }}
+        run: |
+          if gh release view "ota-v${OTA_VERSION}" >/dev/null 2>&1; then
+            echo "::error::OTA version already exists"
+            exit 1
+          fi
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           OTA_VERSION: ${{ inputs.version }}
         run: |
           gh release create "ota-v${OTA_VERSION}" "rjp-train-live-ota-${OTA_VERSION}.zip" "rjp-train-live-ota-${OTA_VERSION}.sha256" --title "RJP Train Live OTA ${OTA_VERSION}" --notes "Web assets only. Native Android changes require a new APK." --target "$GITHUB_SHA"
+
+      - name: Update public OTA manifest after release succeeds
+        env:
+          OTA_VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          v=os.environ['OTA_VERSION']
+          zip_path=pathlib.Path(f'rjp-train-live-ota-{v}.zip')
+          checksum=hashlib.sha256(zip_path.read_bytes()).hexdigest()
+          manifest={
+            'appId':'pt.rjp.trainlive',
+            'version':v,
+            'url':f'https://github.com/ruijpedro/RJP_Train-live/releases/download/ota-v{v}/rjp-train-live-ota-{v}.zip',
+            'notes':f'OTA {v} — identificação CP por cores U, R, IR, IC, AP, SUD e FT',
+            'checksum':checksum
+          }
+          pathlib.Path('ota/manifest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\\n')
+          print('OTA checksum:',checksum)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ota/manifest.json
+          git commit -m "Publish OTA manifest ${OTA_VERSION}"
+          git push origin HEAD:main
