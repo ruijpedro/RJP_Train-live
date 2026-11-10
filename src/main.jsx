@@ -166,7 +166,10 @@ function App(){
    const lat=Number(t.latitude??t.lat),lon=Number(t.longitude??t.lng??t.lon);
    if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat<35||lat>43||lon< -11||lon> -5)return;
    const d=Number(t.delayMinutes??t.delay??0);
-   const mk=L.marker([lat,lon]).addTo(group);
+   const type=trainType(t);
+   const markerColors={U:'#2563eb',R:'#16a34a',IR:'#7c3aed',IC:'#ea580c',AP:'#b91c1c',SUD:'#0f766e',FT:'#0891b2'};
+   const color=markerColors[type]||'#2563eb';
+   const mk=L.marker([lat,lon],{icon:L.divIcon({className:'rjp-cp-marker',html:'<span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:'+color+';border:2px solid #fff;color:#fff;font:bold '+(type.length>2?'10':'13')+'px Arial,sans-serif;box-shadow:0 2px 6px #0007">'+type+'</span>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(group);
    mk.bindTooltip('🚆 '+trainType(t)+' '+n(t.trainNumber??t.number??t.id)+(d>0?' +'+d+' min':''));
    mk.on('click',()=>setSel(t));
   })}
