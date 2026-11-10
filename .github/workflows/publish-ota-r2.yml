@@ -45,7 +45,13 @@ jobs:
           source=open('src/ota.js').read()
           assert f"const VERSION='{v}'" in source, 'src/ota.js tem versão diferente'
           PY
-      - run: npm ci
+      - name: Instalar dependências (com ou sem lockfile)
+        run: |
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
       - name: Compilar WebApp
         env:
           VITE_API_URL: ${{ vars.RJP_API_URL }}
