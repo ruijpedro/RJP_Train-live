@@ -6,7 +6,7 @@ import{LocalNotifications}from"@capacitor/local-notifications";
 import{PushNotifications}from"@capacitor/push-notifications";
 import{initPush,savePushRules,pushState,scheduleRemotePushTest}from"./push.js";
 import{trainStopsEta,minutesUntil,etaProgress}from"./eta.js";
-import {checkOtaUpdate,installOtaUpdate,confirmOtaReady} from"./ota.js";
+import {checkOtaUpdate,installOtaUpdate,confirmOtaReady,getOtaVersionStatus,APP_VERSION} from"./ota.js";
 import L from"leaflet";import"./style.css";
 import{discoverFertagus,normalizeFertagusPositions}from"./fertagus-tml.js";
 import{getSavedAlerts,dispatchAlerts,ALERTS_KEY}from"./alerts.js";
@@ -80,6 +80,8 @@ function sendAlert(c){
 }
 
 function App(){
+ const [versionStatus,setVersionStatus]=useState({state:"checking",latest:null});
+ useEffect(()=>{let active=true;const refresh=()=>getOtaVersionStatus().then(v=>{if(active)setVersionStatus({state:v.updateAvailable?"available":"current",latest:v.latest})}).catch(()=>{if(active)setVersionStatus({state:"offline",latest:null})});refresh();const timer=setInterval(refresh,15*60*1000);return()=>{active=false;clearInterval(timer)}},[]);
  const [otaState,setOtaState]=useState(""),[otaCandidate,setOtaCandidate]=useState(null),[otaBusy,setOtaBusy]=useState(false);
  useEffect(()=>{confirmOtaReady().catch(console.warn)},[]);
  async function checkOta(){setOtaBusy(true);try{const candidate=await checkOtaUpdate();setOtaCandidate(candidate);setOtaState(candidate?`Atualização ${candidate.version} disponível.`:"Sem atualização OTA disponível.")}catch(e){setOtaState(`OTA: ${e.message}`)}finally{setOtaBusy(false)}}
@@ -201,8 +203,8 @@ function App(){
  }
 
  let filtered=trains.filter(t=>enabledTypes.includes(trainType(t))&&JSON.stringify(t).toLowerCase().includes(q.toLowerCase()));
- return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>V2.12</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>CP: <b>Comboios Live — Rui Costa</b> · Fertagus: <b>TML GO Hub (GPS direto)</b></small></div></header>
- <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button className={loading?"refresh loading":"refresh"} onClick={load} disabled={loading}><span>↻</span>{loading?" A atualizar…":" Atualizar agora"}</button><button className="alertsButton" onClick={()=>setAlertOpen(v=>!v)}>🔔 Alertas ({alerts.length})</button><button onClick={checkOta} disabled={otaBusy}>⬇ Verificar OTA</button>{otaCandidate&&<button onClick={applyOta} disabled={otaBusy}>Instalar {otaCandidate.version}</button>}</nav>{otaState&&<p role="status" className="otaStatus">{otaState}</p>}
+ return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>v{APP_VERSION}</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>CP: <b>Comboios Live — Rui Costa</b> · Fertagus: <b>TML GO Hub (GPS direto)</b></small></div></header>
+ <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button className={loading?"refresh loading":"refresh"} onClick={load} disabled={loading}><span>↻</span>{loading?" A atualizar…":" Atualizar agora"}</button><button className="alertsButton" onClick={()=>setAlertOpen(v=>!v)}>🔔 Alertas ({alerts.length})</button><button onClick={checkOta} disabled={otaBusy}>⬇ Verificar OTA</button>{otaCandidate&&<button onClick={applyOta} disabled={otaBusy}>Instalar {otaCandidate.version}</button>}</nav><div className="versionStatus" role="status"><b>Versão instalada: {APP_VERSION}</b><span className={"versionStatusLabel "+versionStatus.state}>{versionStatus.state==="checking"?"A verificar atualização…":versionStatus.state==="offline"?"Não foi possível verificar":versionStatus.state==="available"?"Atualização disponível: "+versionStatus.latest:"Aplicação atualizada"}</span></div>{otaState&&<p role="status" className="otaStatus">{otaState}</p>}
  <div className="trainTypeFilters" role="group" aria-label="Filtrar tipos de comboio">{TRAIN_TYPES.map(type=><button key={type} type="button" className={enabledTypes.includes(type)?"typeActive":"typeInactive"} aria-pressed={enabledTypes.includes(type)} onClick={()=>setEnabledTypes(current=>current.includes(type)?current.filter(x=>x!==type):[...current,type])}>{type}</button>)}</div>
  <section className="stats"><div><b>{trains.length}</b><small>comboios recebidos</small></div><div><b>{trains.filter(t=>+(t.delayMinutes??t.delay??0)>0).length}</b><small>com atraso</small></div><div><b>{updated?updated.toLocaleTimeString("pt-PT"):"—"}</b><small>última atualização</small></div></section>
  {alertOpen&&<section className="alertsPanel"><div className="alertsHeading"><h2>🔔 Alertas ferroviários</h2><button onClick={()=>setAlertOpen(false)} aria-label="Fechar alertas">×</button></div>
