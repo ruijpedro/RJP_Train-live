@@ -26,6 +26,7 @@ jobs:
         run: npm install
       - name: Build web bundle
         env:
+          VITE_APP_VERSION: ${{ inputs.version }}
           VITE_API_URL: ${{ vars.RJP_API_URL }}
           VITE_OTA_MANIFEST_URL: https://raw.githubusercontent.com/ruijpedro/RJP_Train-live/main/ota/manifest.json
         run: npm run build
