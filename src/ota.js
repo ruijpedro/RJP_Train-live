@@ -35,3 +35,11 @@ export async function installOtaUpdate(m){
  const bundle=await CapacitorUpdater.download({url:m.url,version:m.version,checksum:m.checksum});
  await CapacitorUpdater.set({id:bundle.id});
 }
+
+export async function getOtaVersionStatus(){
+ const r=await fetch(URL,{cache:'no-store'});
+ if(!r.ok)throw Error('Não foi possível consultar a versão publicada (HTTP '+r.status+').');
+ const m=await r.json();
+ if(m.appId!==APP||!parts(m.version))throw Error('Manifesto OTA inválido.');
+ return {installed:VERSION,latest:m.version,updateAvailable:isNewer(m.version,VERSION)};
+}
