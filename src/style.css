@@ -108,3 +108,7 @@ main>aside{grid-row:5}
 .trainDialogBackdrop .trainDialog h2{padding-right:56px}
 .trainDialogBackdrop .trainDialogClose{position:sticky;top:0;float:right;z-index:3;display:flex;align-items:center;justify-content:center;width:46px;height:46px;min-width:46px;min-height:46px;padding:0;margin:-8px -6px 4px 8px;border-radius:12px;background:#294966;color:white;font-size:32px;line-height:1;cursor:pointer;touch-action:manipulation}
 @media(max-width:750px){.trainDialogBackdrop{padding:12px}.trainDialogBackdrop .trainDialog{max-height:calc(100dvh - 24px);padding:16px}.trainDialogBackdrop .trainDialogClose{margin:-4px -2px 4px 8px}}
+
+.versionStatus{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 20px;background:#102238;color:#d9e9f8;font-size:13px}
+.versionStatusLabel{font-weight:700;color:#cbd5e1}.versionStatusLabel.current{color:#65e8a0}.versionStatusLabel.available{color:#ffca75}.versionStatusLabel.offline{color:#ffadad}
+@media(max-width:750px){.versionStatus{grid-column:1;padding:9px 12px;font-size:12px}}
