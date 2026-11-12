@@ -1,7 +1,7 @@
 {
   "appId": "pt.rjp.trainlive",
-  "version": "2.12.37",
-  "url": "https://github.com/ruijpedro/RJP_Train-live/releases/download/ota-v2.12.37/rjp-train-live-ota-2.12.37.zip",
-  "notes": "OTA 2.12.37 — identificação CP por cores U, R, IR, IC, AP, SUD e FT",
-  "checksum": "5068d6e510b74b79d6a96482b0c738bab52feb30d071e0a0267c62b1786da0c1"
+  "version": "2.12.38",
+  "url": "https://github.com/ruijpedro/RJP_Train-live/releases/download/ota-v2.12.38/rjp-train-live-ota-2.12.38.zip",
+  "notes": "OTA 2.12.38 — identificação CP por cores U, R, IR, IC, AP, SUD e FT",
+  "checksum": "abedb1530b48fd93f4a50995e010d489fdd76c1ea55a7cf66ba4058b8b5cf8be"
 }
