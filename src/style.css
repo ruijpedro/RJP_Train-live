@@ -101,3 +101,10 @@ main>.stats{grid-row:4}
 main>#map{grid-row:5}
 main>aside{grid-row:5}
 @media(max-width:750px){main>.trainTypeFilters{grid-column:1;grid-row:3}main>.stats{grid-row:4}main>#map{grid-row:5}main>aside{grid-row:6}}
+
+/* Train detail modal: centered viewport, independent scrolling and accessible close */
+.trainDialogBackdrop{position:fixed;inset:0;z-index:2500;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(2,9,18,.72)}
+.trainDialogBackdrop .trainDialog{position:relative;left:auto;right:auto;top:auto;bottom:auto;float:none;width:min(620px,100%);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain;padding:22px 20px;background:#102943;border-radius:16px;box-shadow:0 18px 55px #000b}
+.trainDialogBackdrop .trainDialog h2{padding-right:56px}
+.trainDialogBackdrop .trainDialogClose{position:sticky;top:0;float:right;z-index:3;display:flex;align-items:center;justify-content:center;width:46px;height:46px;min-width:46px;min-height:46px;padding:0;margin:-8px -6px 4px 8px;border-radius:12px;background:#294966;color:white;font-size:32px;line-height:1;cursor:pointer;touch-action:manipulation}
+@media(max-width:750px){.trainDialogBackdrop{padding:12px}.trainDialogBackdrop .trainDialog{max-height:calc(100dvh - 24px);padding:16px}.trainDialogBackdrop .trainDialogClose{margin:-4px -2px 4px 8px}}
