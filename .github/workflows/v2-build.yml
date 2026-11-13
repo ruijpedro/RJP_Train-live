@@ -1,0 +1,139 @@
+name: RJP Train Live 2.0 - CP Oficial Beta
+
+on:
+  push:
+    branches: [rjp-train-live-2.0]
+    paths:
+      - 'v2/**'
+      - '.github/workflows/v2-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: CP GTFS + WebApp independente
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Importar GTFS oficial CP (3 dias)
+        run: |
+          python3 -m py_compile scripts/import_gtfs.py
+          python3 scripts/import_gtfs.py --days 3
+          python3 - <<'PY'
+          import json, pathlib
+          base=pathlib.Path('public/data/cp')
+          manifest=json.loads((base/'manifest.json').read_text())
+          assert len(manifest['days']) == 3
+          assert manifest['realtime'] is False and manifest['gps'] is False
+          for day in manifest['days']:
+              data=json.loads((base/day['file']).read_text())
+              assert data['trains'] and data['stations'], f"GTFS vazio: {day['date']}"
+              assert data['realtime'] is False and data['gps'] is False
+              print(day['date'],len(data['trains']),'circulacoes',len(data['stations']),'estacoes')
+          PY
+      - name: Instalar dependências
+        run: npm install
+      - name: Compilar WebApp Beta
+        run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RJP-Train-Live-2-Web-BETA
+          path: v2/dist/
+          if-no-files-found: error
+
+  android:
+    name: APK separada pt.rjp.trainlive2
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Importar CP GTFS
+        run: python3 scripts/import_gtfs.py --days 3
+      - name: Instalar dependências
+        run: npm install
+      - name: Compilar WebApp
+        run: npm run build
+      - name: Criar Android autónomo
+        run: npx cap add android
+      - name: Sincronizar Capacitor
+        run: npx cap sync android
+      - name: Aplicar ícone RJP Train Live
+        run: |
+          if [ -d ../native-icons/android/res ]; then
+            cp -R ../native-icons/android/res/. android/app/src/main/res/
+          fi
+      - name: Configurar assinatura permanente da APK Beta
+        env:
+          RJP_KEYSTORE_B64: ${{ secrets.RJP_KEYSTORE_B64 }}
+          RJP_KEYSTORE_PASSWORD: ${{ secrets.RJP_KEYSTORE_PASSWORD }}
+          RJP_KEY_PASSWORD: ${{ secrets.RJP_KEY_PASSWORD }}
+          RJP_KEY_ALIAS: ${{ secrets.RJP_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          for key in RJP_KEYSTORE_B64 RJP_KEYSTORE_PASSWORD RJP_KEY_PASSWORD RJP_KEY_ALIAS; do
+            test -n "${!key:-}" || { echo "::error::Secret ${key} em falta"; exit 1; }
+          done
+          printf '%s' "$RJP_KEYSTORE_B64" | base64 --decode > android/app/rjp-release.jks
+          keytool -list -keystore android/app/rjp-release.jks -storepass "$RJP_KEYSTORE_PASSWORD" -alias "$RJP_KEY_ALIAS" >/dev/null
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,re
+          file=Path('android/app/build.gradle')
+          content=file.read_text()
+          assert 'buildTypes {' in content and 'release {' in content
+          content=content.replace('buildTypes {', """signingConfigs {
+              rjpRelease {
+                  storeFile file('rjp-release.jks')
+                  storePassword System.getenv('RJP_KEYSTORE_PASSWORD')
+                  keyAlias System.getenv('RJP_KEY_ALIAS')
+                  keyPassword System.getenv('RJP_KEY_PASSWORD')
+              }
+          }
+          buildTypes {""",1)
+          content=content.replace('release {','release {\n            signingConfig signingConfigs.rjpRelease',1)
+          code=200000+int(os.environ['GITHUB_RUN_NUMBER'])
+          content,n=re.subn(r'\bversionCode\s+\d+',f'versionCode {code}',content,count=1)
+          assert n == 1, 'versionCode nao localizado'
+          content,n=re.subn(r'\bversionName\s+["\'][^"\']+["\']','versionName "2.0.0-beta.1"',content,count=1)
+          assert n == 1, 'versionName nao localizado'
+          file.write_text(content)
+          print('appId pt.rjp.trainlive2; versionCode',code)
+          PY
+      - name: Compilar APK release assinada
+        working-directory: v2/android
+        env:
+          RJP_KEYSTORE_PASSWORD: ${{ secrets.RJP_KEYSTORE_PASSWORD }}
+          RJP_KEY_PASSWORD: ${{ secrets.RJP_KEY_PASSWORD }}
+          RJP_KEY_ALIAS: ${{ secrets.RJP_KEY_ALIAS }}
+        run: chmod +x gradlew && ./gradlew assembleRelease
+      - name: Verificar assinatura e package name
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
+          "$AAPT" dump badging "$APK" | head -1
+          "$AAPT" dump badging "$APK" | grep -q "package: name='pt.rjp.trainlive2'"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RJP-Train-Live-2-Android-BETA
+          path: v2/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
