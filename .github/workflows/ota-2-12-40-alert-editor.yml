@@ -55,15 +55,20 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm test
-      - name: Preparar recuperação original 2.12.41, NÃO publicar
+      - name: Preparar recuperação 2.12.41 a partir do código da OTA anterior (não publicar)
         env:
           VITE_APP_VERSION: '2.12.41'
-          VITE_RJP_V2_MIGRATION: '0'
+          VITE_RJP_V2_MIGRATION: '1'
           VITE_API_URL: ${{ vars.RJP_API_URL }}
           VITE_OTA_MANIFEST_URL: https://raw.githubusercontent.com/ruijpedro/RJP_Train-live/main/ota/manifest.json
         run: |
+          # True rollback candidate from the exact previous released source.
+          git fetch --tags --force
+          git worktree add --detach previous-ota ota-v2.12.39
+          cd previous-ota
+          npm install --no-audit --no-fund
           npm run build
-          cd dist && zip -q -r ../rjp-train-live-rollback-2.12.41.zip . && cd ..
+          cd dist && zip -q -r ../../rjp-train-live-rollback-2.12.41.zip . && cd ../..
           unzip -tq rjp-train-live-rollback-2.12.41.zip
           sha256sum rjp-train-live-rollback-2.12.41.zip > rjp-train-live-rollback-2.12.41.sha256
       - uses: actions/upload-artifact@v4
