@@ -69,7 +69,10 @@ export async function fetchIndependentTrains({now=Date.now(),transport=fetchRemo
  const day=await getDay(now,transport);
  let live=null;
  try{live=await transport(TML_URL,{timeoutMs:12000})}catch(e){console.warn("TML indisponível:",e?.message)}
- if(sampleCP)await refreshSmallCpSample(day.trains,day.date,now,transport);
+ // Direct CP operational queries are asynchronous and rate-limited.
+ // They must never delay first-map rendering on slow CP endpoints.
+ if(sampleCP)void refreshSmallCpSample(day.trains,day.date,now,transport)
+  .catch(e=>console.warn("CP amostra indisponível:",e?.message));
  const unified=buildUnifiedFeed({cpDay:day,positionsPayload:live,now});
  const byTrip=new Map(day.trains.map(t=>[String(t.id),t]));
  const byNumber=new Map();
