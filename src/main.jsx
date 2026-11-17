@@ -257,6 +257,26 @@ function App(){
   setAlertMsg("A editar alerta · "+(rule.target??""));
   alertsPanelRef.current?.scrollTo({top:0,behavior:"smooth"});
  }
+ async function synchronizeAlertChanges(rules,{success,localOnly}={}){
+  try{
+   let result=await savePushRules(rules);
+   // After an OTA the JS runtime restarts and an existing FCM token may need
+   // a fresh registration in this session. Never prompt without permission:
+   // only reuse push authorization that was already granted.
+   if(result?.pending&&Capacitor.isNativePlatform()){
+    const permission=await PushNotifications.checkPermissions();
+    if(permission.receive==="granted"){
+     await initPush(LOCAL_API,rules);
+     result={pending:false};
+    }
+   }
+   setAlertMsg(result?.pending?
+    (localOnly??"Alerta guardado no dispositivo. Ativa push para sincronizar."):
+    (success??"Alertas sincronizados com o servidor."));
+  }catch(error){
+   setAlertMsg("Alteração guardada no dispositivo, mas a sincronização falhou: "+error.message);
+  }
+ }
  async function addAlert(){
   const editing=editingAlertId!==null;
   const old=editing?alerts.find(a=>a.id===editingAlertId):null;
@@ -276,11 +296,10 @@ function App(){
   setAlerts(next);
   resetAlertEditor();
   setAlertMsg(editing?"Alterações guardadas no dispositivo. A sincronizar…":"Alerta criado. A sincronizar…");
-  savePushRules(next).then(r=>setAlertMsg(
-   r?.pending?
-    (editing?"Alerta editado localmente. Ativa push para sincronizar.":"Alerta criado localmente. Ativa push para sincronizar."):
-    (editing?"Alerta editado e sincronizado com o servidor.":"Alerta guardado e sincronizado com o servidor.")
-  )).catch(e=>setAlertMsg("Alerta guardado no dispositivo, mas a sincronização falhou: "+e.message));
+  void synchronizeAlertChanges(next,{
+   success:editing?"Alerta editado e sincronizado com o servidor.":"Alerta guardado e sincronizado com o servidor.",
+   localOnly:editing?"Alerta editado localmente. Ativa push para sincronizar.":"Alerta criado localmente. Ativa push para sincronizar."
+  });
   if(!editing&&Capacitor.isNativePlatform())await enableNotifications();
  }
  function removeAlert(id){
@@ -289,9 +308,10 @@ function App(){
   catch(error){setAlertMsg("Não foi possível remover alerta: "+error.message);return}
   setAlerts(next);
   if(editingAlertId===id)resetAlertEditor();
-  savePushRules(next).then(r=>setAlertMsg(r?.pending?
-   "Alerta removido localmente. Ativa push para sincronizar.":"Alerta removido e sincronizado.")
-  ).catch(e=>setAlertMsg("Alerta removido localmente, mas a sincronização falhou: "+e.message));
+  void synchronizeAlertChanges(next,{
+   success:"Alerta removido e sincronizado.",
+   localOnly:"Alerta removido localmente. Ativa push para sincronizar."
+  });
  }
  async function enableNotifications(){
   try{const ok=await requestAlertPermission();if(ok&&Capacitor.isNativePlatform())await initPush(LOCAL_API,getSavedAlerts());setAlertMsg(ok?(Capacitor.isNativePlatform()?pushState():'Notificações autorizadas.'):'Permissão não concedida. Verifica as definições da aplicação.')}catch(e){console.error(e);setAlertMsg('Não foi possível ativar as notificações.')} 

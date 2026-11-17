@@ -73,3 +73,12 @@ test("disabling an existing alert keeps same ID, but does not dispatch local war
  assert.equal(rule.id,legacy.id);
  assert.deepEqual(results,[]);
 });
+
+test("edits re-register already-authorized Firebase after OTA without changing keys",async()=>{
+ const {readFileSync}=await import("node:fs");
+ const src=readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
+ assert.match(src,/PushNotifications\.checkPermissions\(\)/);
+ assert.match(src,/permission\.receive==="granted"/);
+ assert.match(src,/await initPush\(LOCAL_API,rules\)/);
+ assert.match(src,/void synchronizeAlertChanges\(next/);
+});
