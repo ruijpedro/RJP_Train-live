@@ -30,6 +30,7 @@ jobs:
       - name: Verify new engine in ORIGINAL app bundle (preview only)
         env:
           VITE_RJP_V2_MIGRATION: '1'
+          VITE_APP_VERSION: '2.12.39'
         run: npm run build
       - name: Package preview-only OTA web bundle (do not publish manifest)
         run: |
@@ -37,10 +38,24 @@ jobs:
           zip -q -r ../migration-preview-web.zip .
           cd ..
           unzip -t migration-preview-web.zip
+          python3 - <<'PY'
+          import hashlib, json, pathlib, zipfile
+          file=pathlib.Path('migration-preview-web.zip')
+          with zipfile.ZipFile(file) as z:
+            assert 'index.html' in z.namelist()
+          payload={'appId':'pt.rjp.trainlive','version':'2.12.39',
+            'state':'CANDIDATE_ONLY_NOT_PUBLISHED',
+            'sha256':hashlib.sha256(file.read_bytes()).hexdigest(),
+            'notes':'Motor CP/TML com adesão voluntária; modo original por defeito'}
+          pathlib.Path('migration-preview-checksum.json').write_text(json.dumps(payload,indent=2)+'\n')
+          print('Preview ZIP SHA-256:',payload['sha256'])
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: RJP-Train-Live-migration-preview-NO-PUBLISH
-          path: migration-preview-web.zip
+          path: |
+            migration-preview-web.zip
+            migration-preview-checksum.json
           if-no-files-found: error
       - name: Verify Android identifier, push and OTA remain unchanged
         run: |
