@@ -129,3 +129,20 @@ main>aside{grid-row:5}
 
 /* Source control stays inside the existing version strip, not a new grid row. */
 .versionStatus>.v2PilotPanel{flex:1 1 100%;min-width:0;margin-top:2px;border-top:1px solid #31506c}
+
+
+/* Editable alert rules, preserving the existing dark Train Live presentation. */
+.alertRule{align-items:flex-start}
+.alertRule>span{min-width:0;overflow-wrap:anywhere;flex:1}
+.alertRuleActions{display:flex;gap:7px;align-items:center;flex-shrink:0}
+.alertRuleActions button{min-height:36px;padding:8px 10px;font-size:12px}
+.alertRuleActions button:first-child{background:#155f91;color:#fff}
+.alertRuleActions button:last-child{background:#4b3341}
+.alertFormActions{display:flex;gap:9px;align-items:center;grid-column:1/-1;flex-wrap:wrap}
+.alertFormActions button{min-height:42px}
+.alertPaused{display:inline-block;color:#ffcf7a;border:1px solid #a5803d;border-radius:5px;padding:2px 5px;margin-top:3px}
+@media(max-width:600px){
+ .alertRule{flex-wrap:wrap}
+ .alertRuleActions{width:100%;justify-content:flex-end}
+ .alertRuleActions button{min-height:42px;padding:10px 14px}
+}
