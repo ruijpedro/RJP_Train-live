@@ -1,0 +1,37 @@
+name: RJP Train Live 2 - migration preview (no OTA publication)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/v2/**"
+      - "src/main.jsx"
+      - "tests/v2-*.test.mjs"
+      - ".github/workflows/ci-migration-preview.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    name: Test original app + guarded new feed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run original and new source tests
+        run: npm test
+      - name: Verify original build (migration disabled)
+        env:
+          VITE_RJP_V2_MIGRATION: '0'
+        run: npm run build
+      - name: Verify new engine in ORIGINAL app bundle (preview only)
+        env:
+          VITE_RJP_V2_MIGRATION: '1'
+        run: npm run build
+      - name: Verify Android identifier, push and OTA remain unchanged
+        run: |
+          node -e 'const c=require("./capacitor.config.json");if(c.appId!=="pt.rjp.trainlive")process.exit(1)'
+          node -e 'const m=require("./ota/manifest.json");if(m.version!=="2.12.38")process.exit(1)'
