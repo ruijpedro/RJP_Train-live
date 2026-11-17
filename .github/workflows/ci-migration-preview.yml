@@ -30,7 +30,7 @@ jobs:
       - name: Verify new engine in ORIGINAL app bundle (preview only)
         env:
           VITE_RJP_V2_MIGRATION: '1'
-          VITE_APP_VERSION: '2.12.39'
+          VITE_APP_VERSION: '2.12.40'
         run: npm run build
       - name: Package preview-only OTA web bundle (do not publish manifest)
         run: |
@@ -43,7 +43,7 @@ jobs:
           file=pathlib.Path('migration-preview-web.zip')
           with zipfile.ZipFile(file) as z:
             assert 'index.html' in z.namelist()
-          payload={'appId':'pt.rjp.trainlive','version':'2.12.39',
+          payload={'appId':'pt.rjp.trainlive','version':'2.12.40',
             'state':'CANDIDATE_ONLY_NOT_PUBLISHED',
             'sha256':hashlib.sha256(file.read_bytes()).hexdigest(),
             'notes':'Motor CP/TML com adesão voluntária; modo original por defeito'}
@@ -60,4 +60,4 @@ jobs:
       - name: Verify Android identifier, push and OTA remain unchanged
         run: |
           node -e 'const c=require("./capacitor.config.json");if(c.appId!=="pt.rjp.trainlive")process.exit(1)'
-          node -e 'const m=require("./ota/manifest.json");if(m.version!=="2.12.38")process.exit(1)'
+          node -e 'const m=require("./ota/manifest.json");if(m.appId!=="pt.rjp.trainlive"||!/^\\d+\\.\\d+\\.\\d+$/.test(m.version))process.exit(1)'

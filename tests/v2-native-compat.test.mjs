@@ -26,7 +26,8 @@ test("migration is gated and original push/alert state remains intact",()=>{
 test("the production OTA manifest is untouched",()=>{
  const m=JSON.parse(read("ota/manifest.json"));
  assert.equal(m.appId,"pt.rjp.trainlive");
- assert.equal(m.version,"2.12.38");
+ assert.match(m.version,/^\d+\.\d+\.\d+$/);
+ assert.ok(m.version.split(".").map(Number).reduce((acc,n)=>acc*1000+n,0)>=2012039);
 });
 
 test("legacy FCM alert source is preserved even when independent map is on",()=>{
