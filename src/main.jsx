@@ -21,6 +21,8 @@ const RUI_FEED="https://comboios.ruicosta.pt/api/cache/trains/active";
 // In this review branch, the original app stays in legacy mode by default.
 // Enable ONLY in a verified preview build; production OTA needs a separate release.
 const V2_MIGRATION=import.meta.env.VITE_RJP_V2_MIGRATION==="1";
+const V2_PILOT_KEY="rjp_train_v2_pilot_opt_in";
+// This only controls the display/data source; no alert, FCM or OTA key changes.
 const BASE=import.meta.env.BASE_URL;
 function directTrain(x){
  const raw=x?.data||{},live=raw?.status||{},fixed=x?.fixed||{},db=x?.db||{};
@@ -84,7 +86,32 @@ function sendAlert(c){
  showNotification(title,body,c.key).catch(console.error);
 }
 
+
+async function fetchOriginalFeed(){
+ const feeds=[
+  {name:"RJP API · Comboios Live",url:LOCAL_API+"/trains/active"},
+  {name:"Comboios Live · Rui Costa",url:RUI_FEED}
+ ];
+ const errors=[];
+ for(const feed of feeds){
+  try{
+   const response=await fetch(feed.url,{headers:{accept:"application/json"},cache:"no-store"});
+   if(!response.ok)throw Error("HTTP "+response.status);
+   const payload=await response.json();
+   const raw=Array.isArray(payload)?payload:(Array.isArray(payload?.data)?payload.data:Array.isArray(payload?.trains)?payload.trains:[]);
+   if(!raw.length)throw Error("sem comboios na resposta");
+   const trains=raw.map(x=>(x?.data?.status||x?.fixed||x?.db)?directTrain(x):x);
+   if(!trains.some(t=>t.latitude!=null&&t.longitude!=null&&Number.isFinite(Number(t.latitude))&&Number.isFinite(Number(t.longitude))))
+    throw Error("sem coordenadas CP");
+   return {trains,source:feed.name};
+  }catch(e){errors.push(feed.name+": "+String(e?.message||e))}
+ }
+ throw Error(errors.join(" | "));
+}
+
 function App(){
+ const [pilotMode,setPilotMode]=useState(()=>V2_MIGRATION&&localStorage.getItem(V2_PILOT_KEY)==="1");
+ const pilotModeRef=useRef(pilotMode),loadEpoch=useRef(0);
  const [versionStatus,setVersionStatus]=useState({state:"checking",latest:null});
  useEffect(()=>{let active=true;const refresh=()=>getOtaVersionStatus().then(v=>{if(active)setVersionStatus({state:v.updateAvailable?"available":"current",latest:v.latest})}).catch(()=>{if(active)setVersionStatus({state:"offline",latest:null})});refresh();const timer=setInterval(refresh,15*60*1000);return()=>{active=false;clearInterval(timer)}},[]);
  const [otaState,setOtaState]=useState(""),[otaCandidate,setOtaCandidate]=useState(null),[otaBusy,setOtaBusy]=useState(false);
@@ -136,53 +163,54 @@ function App(){
   }catch(error){console.warn("Fertagus GPS indisponível:",error)}
  }
  async function load(){
+  const epoch=++loadEpoch.current;
   setLoading(true);
   try{
-   let a=[],primary="",errors=[];
-   if(V2_MIGRATION){
+   if(V2_MIGRATION&&pilotModeRef.current){
     try{
      const independent=await fetchIndependentTrains();
+     if(epoch!==loadEpoch.current)return;
      setTrains(independent.trains);
-     // Avoid firing local alerts on timetable-only positions. Existing FCM
-     // device registration and remote push rules are left entirely unchanged.
-     dispatchAlerts(independent.alertEligible,getSavedAlerts(),new Date(),c=>
-      sendAlert({...c,feedSource:"CP/TML"}));
      setUpdated(new Date());
-     setStatus("Online · CP GTFS + TML · "+independent.gpsCount+
-      " GPS · "+independent.estimateCount+" estimativas");
+     setStatus("Online · CP GTFS/TML · "+independent.gpsCount+" GPS · "+
+      independent.estimateCount+" estimativas");
+     // The original alert source is preserved independently of the new
+     // map feed. Neither GTFS-only schedules nor interpolations may trigger
+     // old local notifications. Remote Firebase rules stay unchanged.
+     void fetchOriginalFeed().then(({trains})=>{
+      if(epoch===loadEpoch.current&&pilotModeRef.current)
+       dispatchAlerts(trains,getSavedAlerts(),new Date(),sendAlert);
+     }).catch(e=>console.warn("Fonte dos alertas legados indisponível:",e?.message));
      return;
     }catch(e){
-     errors.push("Motor CP/TML: "+String(e?.message||e));
-     console.warn("Fontes CP/TML indisponíveis: a usar fonte de reserva",e);
+     console.warn("Motor CP/TML indisponível; regressão automática à fonte anterior:",e);
     }
    }
-   // Original Worker/Comboios Live: last-resort data source in migration mode.
-   // Try the existing Worker first, then the original CP feed independently.
-   // A failed Worker must never hide CP trains from the map.
-   const feeds=[
-    {name:"RJP API · Comboios Live",url:LOCAL_API+"/trains/active"},
-    {name:"Comboios Live · Rui Costa",url:RUI_FEED}
-   ];
-   for(const feed of feeds){
-    try{
-     const response=await fetch(feed.url,{headers:{accept:"application/json"},cache:"no-store"});
-     if(!response.ok)throw Error("HTTP "+response.status);
-     const payload=await response.json();
-     const raw=Array.isArray(payload)?payload:(Array.isArray(payload?.data)?payload.data:Array.isArray(payload?.trains)?payload.trains:[]);
-     if(!raw.length)throw Error("sem comboios na resposta");
-     const normalized=raw.map(x=>(x?.data?.status||x?.fixed||x?.db)?directTrain(x):x);
-     if(!normalized.some(t=>t.latitude!=null&&t.longitude!=null&&Number.isFinite(Number(t.latitude))&&Number.isFinite(Number(t.longitude))))throw Error("sem coordenadas CP");
-     a=normalized;primary=feed.name;break;
-    }catch(error){errors.push(feed.name+": "+String(error?.message||error))}
-   }
-   if(!a.length)throw Error(errors.join(" | "));
-   setTrains(a);dispatchAlerts(a,getSavedAlerts(),new Date(),sendAlert);setUpdated(new Date());setStatus(`Online · ${primary}`);
-
-   }catch(e){
+   // Original source used normally, or only as last-resort for the
+   // independent pilot when CP GTFS/TML cannot produce map positions.
+   const original=await fetchOriginalFeed();
+   if(epoch!==loadEpoch.current)return;
+   setTrains(original.trains);
+   dispatchAlerts(original.trains,getSavedAlerts(),new Date(),sendAlert);
+   setUpdated(new Date());
+   setStatus("Online · "+original.source+(pilotModeRef.current?" (reserva automática)":""));
+  }catch(e){
+   if(epoch!==loadEpoch.current)return;
    console.error("RJP Train Live feed error:",e);
-   const msg=e instanceof TypeError?"CORS/rede":(e?.message||"erro");
-   setStatus(`CP indisponível · ${msg}`)
-  } finally { setLoading(false); }
+   const msg=e instanceof TypeError?"CORS/rede":e?.message||"erro";
+   setStatus("CP indisponível · "+msg);
+  }finally{
+   if(epoch===loadEpoch.current)setLoading(false);
+  }
+ }
+ function switchPilot(){
+  if(!V2_MIGRATION)return;
+  const next=!pilotModeRef.current;
+  pilotModeRef.current=next;
+  localStorage.setItem(V2_PILOT_KEY,next?"1":"0");
+  setPilotMode(next);
+  setSel(null);
+  load();
  }
  useEffect(()=>{
   localStorage.setItem('rjp_train_types',JSON.stringify(enabledTypes));
@@ -194,7 +222,8 @@ function App(){
    const type=trainType(t);
    const markerColors={U:'#2563eb',R:'#16a34a',IR:'#7c3aed',IC:'#ea580c',AP:'#b91c1c',SUD:'#0f766e',FT:'#0891b2'};
    const color=markerColors[type]||'#2563eb';
-   const mk=L.marker([lat,lon],{icon:L.divIcon({className:'rjp-cp-marker',html:'<span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:'+color+';border:2px solid #fff;color:#fff;font:bold '+(type.length>2?'10':'13')+'px Arial,sans-serif;box-shadow:0 2px 6px #0007">'+type+'</span>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(group);
+   const border=(t.positionKind==="timetable-estimated"||t.positionKind==="cp-estimated")?"dashed":"solid";
+   const mk=L.marker([lat,lon],{icon:L.divIcon({className:'rjp-cp-marker',html:'<span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:'+color+';border:2px '+border+' #fff;color:#fff;font:bold '+(type.length>2?'10':'13')+'px Arial,sans-serif;box-shadow:0 2px 6px #0007">'+type+'</span>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(group);
    mk.bindTooltip('🚆 '+trainType(t)+' '+n(t.trainNumber??t.number??t.id)+
     (t.positionKind?' · '+t.source:'')+(d>0?' +'+d+' min':''));
    mk.on('click',()=>setSel(t));
@@ -227,8 +256,17 @@ function App(){
  }
 
  let filtered=trains.filter(t=>enabledTypes.includes(trainType(t))&&JSON.stringify(t).toLowerCase().includes(q.toLowerCase()));
- return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>v{APP_VERSION}</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>CP: <b>{V2_MIGRATION?"CP GTFS + TML · Rui Costa em reserva":"Comboios Live — Rui Costa"}</b> · Fertagus: <b>TML GO Hub (GPS direto)</b></small></div></header>
+ return <main><header><div><div className="brand"><img src={`${BASE}icons/icon-192.png`} className="brandIcon" alt="RJP Train Live"/><h1>RJP TRAIN LIVE <em>v{APP_VERSION}</em></h1></div><small>Tráfego Ferroviário em Portugal • Rede • Comboios • Estações • Atrasos</small></div><div className="sourceBox"><div className="live"><i className={status.startsWith("Online")?"on":""}/>{status}</div><small>CP: <b>{pilotMode?"CP GTFS + TML · Rui Costa em reserva":"Comboios Live — Rui Costa"}</b> · Fertagus: <b>TML GO Hub (GPS direto)</b></small></div></header>
  <nav><input placeholder="Pesquisar comboio, estação ou linha…" value={q} onChange={e=>setQ(e.target.value)}/><button className={loading?"refresh loading":"refresh"} onClick={load} disabled={loading}><span>↻</span>{loading?" A atualizar…":" Atualizar agora"}</button><button className="alertsButton" onClick={()=>setAlertOpen(v=>!v)}>🔔 Alertas ({alerts.length})</button><button onClick={checkOta} disabled={otaBusy}>⬇ Verificar OTA</button>{otaCandidate&&<button onClick={applyOta} disabled={otaBusy}>Instalar {otaCandidate.version}</button>}</nav><div className="versionStatus" role="status"><b>Versão instalada: {APP_VERSION}</b><span className={"versionStatusLabel "+versionStatus.state}>{versionStatus.state==="checking"?"A verificar atualização…":versionStatus.state==="offline"?"Não foi possível verificar":versionStatus.state==="available"?"Atualização disponível: "+versionStatus.latest:"Aplicação atualizada"}</span></div>{otaState&&<p role="status" className="otaStatus">{otaState}</p>}
+ {V2_MIGRATION&&<details className="v2PilotPanel"><summary>Fonte de dados · Ensaio da versão 2.0</summary>
+ <div className="v2PilotContent">
+ <p><b>Modo atual: {pilotMode?"Motor 2.0 (experimental)":"Original (estável)"}</b></p>
+ <p>{pilotMode?"Horários CP + TML e estimativas; Comboios Live em reserva.":"A usar a fonte original e os alertas existentes."}</p>
+ <button type="button" onClick={switchPilot} className={pilotMode?"v2Revert":"v2Enable"}>
+ {pilotMode?"Voltar à original (estável)":"Experimentar motor 2.0"}
+ </button>
+ <small>Não desinstala a aplicação nem apaga alertas. Posições estimadas não são GPS e não comprovam circulação.</small>
+ </div></details>}
  <div className="trainTypeFilters" role="group" aria-label="Filtrar tipos de comboio">{TRAIN_TYPES.map(type=><button key={type} type="button" className={enabledTypes.includes(type)?"typeActive":"typeInactive"} aria-pressed={enabledTypes.includes(type)} onClick={()=>setEnabledTypes(current=>current.includes(type)?current.filter(x=>x!==type):[...current,type])}>{type}</button>)}</div>
  <section className="stats"><div><b>{trains.length}</b><small>comboios recebidos</small></div><div><b>{trains.filter(t=>+(t.delayMinutes??t.delay??0)>0).length}</b><small>com atraso</small></div><div><b>{updated?updated.toLocaleTimeString("pt-PT"):"—"}</b><small>última atualização</small></div></section>
  {alertOpen&&<section className="alertsPanel"><div className="alertsHeading"><h2>🔔 Alertas ferroviários</h2><button onClick={()=>setAlertOpen(false)} aria-label="Fechar alertas">×</button></div>
@@ -253,6 +291,6 @@ function App(){
  <aside><h3>Comboios</h3>{filtered.slice(0,100).map((t,i)=>{let d=+(t.delayMinutes??t.delay??0);return <article key={i} onClick={()=>setSel(t)}><b>🚆 {n(t.trainNumber??t.number??t.id)}</b><span className={d>0?"late":"ok"}>{d>0?`+${d} min`:"A horas"}</span><small>{n(t.origin?.designation??t.origin)} → {n(t.destination?.designation??t.destination)}</small></article>})}</aside>
  {sel&&<div className="trainDialogBackdrop" onClick={()=>setSel(null)}><div className="card trainDialog" role="dialog" aria-modal="true" aria-label="Detalhes do comboio" onClick={e=>e.stopPropagation()}><button type="button" className="trainDialogClose" aria-label="Fechar detalhes do comboio" onClick={()=>setSel(null)}>×</button><h2>🚆 {n(sel.trainNumber??sel.number??sel.id)}</h2><p><b>{n(sel.origin?.designation??sel.origin)}</b> → <b>{n(sel.destination?.designation??sel.destination)}</b></p>{sel.type==="FT"?<><p><b>Fertagus · GPS TML GO Hub</b></p><p>Veículo: {n(sel.vehicleId)} · Viagem: {n(sel.tripId)}</p><p>Última posição: {new Date(sel.positionTimestamp).toLocaleTimeString("pt-PT")}</p><p>Latitude: {Number(sel.latitude).toFixed(5)} · Longitude: {Number(sel.longitude).toFixed(5)}</p><small>Destino, atraso e ETA não disponíveis nesta fonte.</small></>:<><p>Atraso: <strong className={+(sel.delayMinutes??sel.delay??0)>0?"late":"ok"}>{+(sel.delayMinutes??sel.delay??0)>0?`+${sel.delayMinutes??sel.delay} min`:"A horas"}</strong></p><p>Serviço: <b>{n(sel.service??sel.serviceCode)}</b></p><p>Estado: {n(sel.status)} · Última: {n(sel.lastStation)}</p><p>Próxima: {n(sel.nextStop?.designation??sel.nextStop)}</p><section className="etaSection"><h3>🕒 Chegadas estimadas (ETA)</h3><p className="etaNote">Atualizado: {updated?updated.toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"—"} · {updated&&clock-updated>120000?"⚠️ Dados com mais de 2 minutos":"Dados da última consulta"}</p><p className="etaNote">Percurso: {etaProgress(sel).lastIndex>=0?`${etaProgress(sel).lastIndex+1} de ${etaProgress(sel).stops.length} estações alcançadas (última conhecida)` :"posição no percurso não confirmada"}</p><p className="etaNote">Horário previsto + atraso atual, quando disponível. Estimativa sujeita a alterações. *Contagem aproximada, dependente do dia de circulação.</p>{trainStopsEta(sel).length? <div className="etaStops">{trainStopsEta(sel).map(stop=><div className="etaStop" key={stop.key}><b>{stop.station}</b><span>Horário: {stop.scheduled??'—'}</span><strong>ETA: {stop.eta??'indisponível'}</strong>{stop.eta&&minutesUntil(stop.eta,clock)!==null&&<span className="etaCountdown">Dentro de {minutesUntil(stop.eta,clock)} min*</span>}<small>{stop.source==='calculado'?'Calculado com o atraso atual':stop.source==='fonte'?'Estimativa fornecida pela fonte':'Dados insuficientes'}</small></div>)}</div>:<p>Não há horários de paragem disponíveis para calcular o ETA.</p>}</section><p>Fonte dos dados: <b>{sel.source||"WebApp Comboios Live — Rui Costa"}</b></p>
  {sel.positionKind?.includes("estimated")&&<small>Posição estimada por horário/estado CP, não GPS; circulação não necessariamente confirmada.</small>}<p className="via">Ligação: {sel.positionKind?"CP/TML independente":"RJP API / Cloudflare Worker"}</p><small>Posição e estado dependem da fonte dinâmica disponível. Informação não destinada a segurança da exploração.</small></>}</div></div>}
- <footer>Fontes: {V2_MIGRATION?<><b>CP GTFS + TML independentes</b> · <b>Comboios Live (reserva)</b></>:<b>Comboios Live — Rui Costa (CP)</b>} · <b>TML GO Hub (Fertagus)</b> · As posições estimadas não são GPS nem confirmam circulação. · Não destinada à segurança da exploração.</footer></main>
+ <footer>Fontes: {pilotMode?<><b>CP GTFS + TML independentes</b> · <b>Comboios Live (reserva; fonte dos alertas legados)</b></>:<b>Comboios Live — Rui Costa (CP)</b>} · <b>TML GO Hub (Fertagus)</b> · As posições estimadas não são GPS nem confirmam circulação. · Não destinada à segurança da exploração.</footer></main>
 }
 createRoot(document.getElementById("root")).render(<App/>);

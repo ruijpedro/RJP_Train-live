@@ -112,3 +112,17 @@ main>aside{grid-row:5}
 .versionStatus{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 20px;background:#102238;color:#d9e9f8;font-size:13px}
 .versionStatusLabel{font-weight:700;color:#cbd5e1}.versionStatusLabel.current{color:#65e8a0}.versionStatusLabel.available{color:#ffca75}.versionStatusLabel.offline{color:#ffadad}
 @media(max-width:750px){.versionStatus{grid-column:1;padding:9px 12px;font-size:12px}}
+
+
+/* Opt-in source experiment, below existing OTA/status controls.
+   Hidden by default. No new toolbar button obstructs the original layout. */
+.v2PilotPanel{grid-column:1/-1;background:#102238;border-top:1px solid #31506c;
+ color:#dceafa;padding:8px 14px;font-size:12px}
+.v2PilotPanel>summary{cursor:pointer;font-weight:700;color:#a6d9fb;font-size:12px}
+.v2PilotContent{padding:9px 0 3px;display:flex;flex-direction:column;align-items:flex-start;gap:7px}
+.v2PilotContent p{margin:0;line-height:1.45}
+.v2PilotContent button{border-radius:9px;font-size:13px;font-weight:800;padding:10px 14px;min-height:40px}
+.v2PilotContent .v2Enable{background:#0d7db7;color:#fff}
+.v2PilotContent .v2Revert{background:#294b65;color:#fff;border:1px solid #90c9ed}
+.v2PilotContent small{line-height:1.45;color:#bed1e0}
+@media(max-width:750px){.v2PilotPanel{grid-column:1;padding:8px 12px}}
