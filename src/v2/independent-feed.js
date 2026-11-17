@@ -12,7 +12,7 @@ const queries=new Map();
 export function adaptTrain(v,train=null,{gps=false}={}){
  const lat=Number(v.latitude??v.position?.latitude),lon=Number(v.longitude??v.position?.longitude);
  if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat<36||lat>43||lon< -11||lon> -5)return null;
- const type=String(v.type??v.serviceType??train?.type??"R").toUpperCase();
+ const type=String(v.type??train?.type??v.serviceType??"R").toUpperCase();
  const num=String(v.number??v.trainNumber??v.vehicleId??"");
  const kind=gps?"operator-gps":v.level==="cp-anchored"?"cp-estimated":"timetable-estimated";
  return {id:num,trainNumber:num,type,service:CP_SERVICE[type]??type,
@@ -75,12 +75,15 @@ export async function fetchIndependentTrains({now=Date.now(),transport=fetchRemo
  const byNumber=new Map();
  for(const t of day.trains)if(!byNumber.has(String(t.number)))byNumber.set(String(t.number),t);
  const cpGps=unified.vehicles.filter(v=>v.agencyId===CP_AGENCY);
- const gps=cpGps.map(v=>adaptTrain({trainNumber:v.trainNumber??v.vehicleId,
+// A GPS vehicle without a confirmed GTFS trip identity is not presented
+// to passengers as a CP train number; such vehicles remain diagnostic-only.
+const cpGpsIdentified=cpGps.filter(v=>v.match?.validated&&/^\d{1,6}$/.test(String(v.trainNumber??"")));
+ const gps=cpGpsIdentified.map(v=>adaptTrain({trainNumber:v.trainNumber??v.vehicleId,
    type:v.serviceType,position:v.position,origin:v.journey?.origin,destination:v.journey?.destination},
    byTrip.get(String(v.journey?.gtfsTripId))??byNumber.get(String(v.trainNumber)),{gps:true})).filter(Boolean);
  const estimates=buildEstimatedPositions({trains:day.trains,date:day.date,now,
   queries:[...queries.values()].filter(q=>q.date===day.date),
-  gpsVehicles:cpGps.map(v=>({agency:CP_AGENCY,trainNumber:v.trainNumber}))});
+  gpsVehicles:cpGpsIdentified.map(v=>({agency:CP_AGENCY,trainNumber:v.trainNumber}))});
  const scheduled=estimates.map(v=>adaptTrain(v,byTrip.get(String(v.tripId))??byNumber.get(String(v.number)))).filter(Boolean);
  const unique=new Map();
  for(const v of [...scheduled,...gps])unique.set(String(v.trainNumber),v); // GPS has precedence

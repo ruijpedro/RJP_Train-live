@@ -31,6 +31,17 @@ jobs:
         env:
           VITE_RJP_V2_MIGRATION: '1'
         run: npm run build
+      - name: Package preview-only OTA web bundle (do not publish manifest)
+        run: |
+          cd dist
+          zip -q -r ../migration-preview-web.zip .
+          cd ..
+          unzip -t migration-preview-web.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RJP-Train-Live-migration-preview-NO-PUBLISH
+          path: migration-preview-web.zip
+          if-no-files-found: error
       - name: Verify Android identifier, push and OTA remain unchanged
         run: |
           node -e 'const c=require("./capacitor.config.json");if(c.appId!=="pt.rjp.trainlive")process.exit(1)'
