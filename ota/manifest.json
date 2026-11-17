@@ -1,7 +1,7 @@
 {
   "appId": "pt.rjp.trainlive",
-  "version": "2.12.39",
-  "url": "https://github.com/ruijpedro/RJP_Train-live/releases/download/ota-v2.12.39/rjp-train-live-ota-2.12.39.zip",
-  "notes": "OTA 2.12.39 - modo original por defeito, motor 2.0 opcional e alertas preservados",
-  "checksum": "18ad481ef9184c42dac7557a7a4aef00e3460e22ecb37e2b1c32e718c1bc11ef"
+  "version": "2.12.40",
+  "url": "https://github.com/ruijpedro/RJP_Train-live/releases/download/ota-v2.12.40/rjp-train-live-ota-2.12.40.zip",
+  "notes": "OTA 2.12.40 - alertas editáveis, Firebase e motor 2.0 preservados",
+  "checksum": "3e7757527f2f874ecfd7beeaa2722e7e7a48668679292160006a24658231eee4"
 }
