@@ -11,6 +11,7 @@ import L from"leaflet";import"./style.css";
 import{discoverFertagus,normalizeFertagusPositions}from"./fertagus-tml.js";
 import{getSavedAlerts,dispatchAlerts,ALERTS_KEY}from"./alerts.js";
 import{scheduleLabel}from"./schedule.js";
+import {formFromAlert,makeAlertRule,replaceAlert} from "./alert-editor.js";
 import {fetchIndependentTrains} from "./v2/independent-feed.js";
 const DEFAULT_API="https://rjp-train-live-api.rjpedro.workers.dev/api";
 const BUILD_API=(import.meta.env.VITE_API_URL||"").replace(/\/$/,"");
@@ -118,7 +119,8 @@ function App(){
  useEffect(()=>{confirmOtaReady().catch(console.warn)},[]);
  async function checkOta(){setOtaBusy(true);try{const candidate=await checkOtaUpdate();setOtaCandidate(candidate);setOtaState(candidate?`Atualização ${candidate.version} disponível.`:"Sem atualização OTA disponível.")}catch(e){setOtaState(`OTA: ${e.message}`)}finally{setOtaBusy(false)}}
  async function applyOta(){if(!otaCandidate)return;setOtaBusy(true);try{setOtaState("A descarregar atualização OTA…");await installOtaUpdate(otaCandidate);setOtaState("Atualização aplicada. A reiniciar…")}catch(e){setOtaState(`OTA falhou: ${e.message}`)}finally{setOtaBusy(false)}}
- const [scheduleType,setScheduleType]=useState("weekly"),[alertDate,setAlertDate]=useState(""),[monthDay,setMonthDay]=useState(1),[monthYear,setMonthYear]=useState(""); const [clock,setClock]=useState(()=>new Date()); const mapRef=useRef(),layers=useRef({}); const [alertDays,setAlertDays]=useState([0,1,2,3,4,5,6]),[notifyBefore,setNotifyBefore]=useState(true),[notifyOnArrival,setNotifyOnArrival]=useState(true),[alerts,setAlerts]=useState(getSavedAlerts),[alertOpen,setAlertOpen]=useState(false),[alertScope,setAlertScope]=useState("station"),[alertStation,setAlertStation]=useState(""),[alertTarget,setAlertTarget]=useState(""),[alertEvent,setAlertEvent]=useState("both"),[alertLead,setAlertLead]=useState(10),[alertMsg,setAlertMsg]=useState(""); const [enabledTypes,setEnabledTypes]=useState(()=>{try{const saved=JSON.parse(localStorage.getItem('rjp_train_types'));return Array.isArray(saved)?saved.filter(x=>TRAIN_TYPES.includes(x)):TRAIN_TYPES}catch{return TRAIN_TYPES}}); const[trains,setTrains]=useState([]),[sel,setSel]=useState(),[q,setQ]=useState(""),[status,setStatus]=useState("A ligar…"),[updated,setUpdated]=useState(),[loading,setLoading]=useState(false);
+ const [scheduleType,setScheduleType]=useState("weekly"),[alertDate,setAlertDate]=useState(""),[monthDay,setMonthDay]=useState(1),[monthYear,setMonthYear]=useState(""); const [clock,setClock]=useState(()=>new Date()); const mapRef=useRef(),layers=useRef({}); const [alertDays,setAlertDays]=useState([0,1,2,3,4,5,6]),[notifyBefore,setNotifyBefore]=useState(true),[notifyOnArrival,setNotifyOnArrival]=useState(true),[alerts,setAlerts]=useState(getSavedAlerts),[alertOpen,setAlertOpen]=useState(false),[alertScope,setAlertScope]=useState("station"),[alertStation,setAlertStation]=useState(""),[alertTarget,setAlertTarget]=useState(""),[alertEvent,setAlertEvent]=useState("both"),[alertLead,setAlertLead]=useState(10),[alertMsg,setAlertMsg]=useState(""),[editingAlertId,setEditingAlertId]=useState(null),[alertEnabled,setAlertEnabled]=useState(true);
+ const alertsPanelRef=useRef(null); const [enabledTypes,setEnabledTypes]=useState(()=>{try{const saved=JSON.parse(localStorage.getItem('rjp_train_types'));return Array.isArray(saved)?saved.filter(x=>TRAIN_TYPES.includes(x)):TRAIN_TYPES}catch{return TRAIN_TYPES}}); const[trains,setTrains]=useState([]),[sel,setSel]=useState(),[q,setQ]=useState(""),[status,setStatus]=useState("A ligar…"),[updated,setUpdated]=useState(),[loading,setLoading]=useState(false);
  useEffect(()=>{let m=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);mapRef.current=m;
  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",opacity:.72}).addTo(m);
  // Railway-first overlay: visible immediately when the app opens.
@@ -234,16 +236,63 @@ function App(){
  useEffect(()=>{load();loadFertagus();let i=setInterval(()=>{load();loadFertagus()},30000);return()=>clearInterval(i)},[]);
  useEffect(()=>{const i=setInterval(()=>setClock(new Date()),30000);return()=>clearInterval(i)},[]);
  useEffect(()=>{if(!sel)return;const fresh=trains.find(t=>String(t.trainNumber??t.id)===String(sel.trainNumber??sel.id));if(fresh&&fresh!==sel)setSel(fresh)},[trains]);
- async function addAlert(){
-  const target=alertTarget.trim();if(!target){setAlertMsg('Indica a estação ou o número do comboio.');return}
-  const rule={id:Date.now().toString(36),scope:alertScope,target,station:alertScope==='combined'?alertStation.trim():'',event:alertEvent,lead:Number(alertLead),days:alertDays,scheduleType,date:scheduleType==='date'?alertDate:undefined,monthDay:scheduleType==='monthly'?Number(monthDay):undefined,year:scheduleType==='monthly'&&monthYear?Number(monthYear):undefined,notifyBefore,notifyOnArrival,enabled:true};
-  if(!Number.isInteger(rule.lead)||rule.lead<0||rule.lead>1440||(scheduleType==='weekly'&&!alertDays.length)||(!notifyBefore&&!notifyOnArrival)){setAlertMsg('Escolhe pelo menos um dia e um aviso; antecedência de 0 a 1440 minutos.');return}
-  if(scheduleType==='date'&&!/^\d{4}-\d{2}-\d{2}$/.test(alertDate)){setAlertMsg('Seleciona uma data válida.');return}
-  if(scheduleType==='monthly'&&(!Number.isInteger(Number(monthDay))||Number(monthDay)<1||Number(monthDay)>31)){setAlertMsg('Seleciona um dia do mês entre 1 e 31.');return}
-  if(alertScope==='combined'&&!rule.station){setAlertMsg('Indica a estação para o alerta combinado.');return}
-  const next=[...alerts,rule];setAlerts(next);localStorage.setItem(ALERTS_KEY,JSON.stringify(next));savePushRules(next).then(r=>setAlertMsg(r?.pending?'Alerta guardado localmente. Ativa push para sincronizar.':'Alerta guardado e sincronizado com o servidor.')).catch(e=>setAlertMsg('Alerta local guardado, mas sincronização falhou: '+e.message));setAlertTarget('');if(Capacitor.isNativePlatform())await enableNotifications();
+ function resetAlertEditor(){
+  setEditingAlertId(null);
+  setAlertScope("station");setAlertTarget("");setAlertStation("");
+  setAlertEvent("both");setAlertLead(10);setScheduleType("weekly");
+  setAlertDate("");setMonthDay(1);setMonthYear("");
+  setAlertDays([0,1,2,3,4,5,6]);
+  setNotifyBefore(true);setNotifyOnArrival(true);setAlertEnabled(true);
  }
- function removeAlert(id){const next=alerts.filter(a=>a.id!==id);setAlerts(next);localStorage.setItem(ALERTS_KEY,JSON.stringify(next));savePushRules(next).catch(console.warn)}
+ function editAlert(rule){
+  if(!rule?.id)return;
+  const form=formFromAlert(rule);
+  setEditingAlertId(rule.id);setAlertScope(form.scope);
+  setAlertTarget(form.target);setAlertStation(form.station);
+  setAlertEvent(form.event);setAlertLead(form.lead);
+  setScheduleType(form.scheduleType);setAlertDate(form.date);
+  setMonthDay(form.monthDay);setMonthYear(form.monthYear);
+  setAlertDays(form.days);setNotifyBefore(form.notifyBefore);
+  setNotifyOnArrival(form.notifyOnArrival);setAlertEnabled(form.enabled);
+  setAlertMsg("A editar alerta · "+(rule.target??""));
+  alertsPanelRef.current?.scrollTo({top:0,behavior:"smooth"});
+ }
+ async function addAlert(){
+  const editing=editingAlertId!==null;
+  const old=editing?alerts.find(a=>a.id===editingAlertId):null;
+  if(editing&&!old){setAlertMsg("O alerta a editar já não existe. Volta a abrir a edição.");return}
+  let rule;
+  try{
+   rule=makeAlertRule({
+    scope:alertScope,target:alertTarget,station:alertStation,event:alertEvent,
+    lead:alertLead,days:alertDays,scheduleType,date:alertDate,
+    monthDay,monthYear,notifyBefore,notifyOnArrival,enabled:alertEnabled
+   },{existing:old});
+  }catch(error){setAlertMsg(error.message);return}
+  const next=editing?replaceAlert(alerts,rule):[...alerts,rule];
+  try{
+   localStorage.setItem(ALERTS_KEY,JSON.stringify(next));
+  }catch(error){setAlertMsg("Não foi possível guardar o alerta: "+error.message);return}
+  setAlerts(next);
+  resetAlertEditor();
+  setAlertMsg(editing?"Alterações guardadas no dispositivo. A sincronizar…":"Alerta criado. A sincronizar…");
+  savePushRules(next).then(r=>setAlertMsg(
+   r?.pending?
+    (editing?"Alerta editado localmente. Ativa push para sincronizar.":"Alerta criado localmente. Ativa push para sincronizar."):
+    (editing?"Alerta editado e sincronizado com o servidor.":"Alerta guardado e sincronizado com o servidor.")
+  )).catch(e=>setAlertMsg("Alerta guardado no dispositivo, mas a sincronização falhou: "+e.message));
+  if(!editing&&Capacitor.isNativePlatform())await enableNotifications();
+ }
+ function removeAlert(id){
+  const next=alerts.filter(a=>a.id!==id);
+  try{localStorage.setItem(ALERTS_KEY,JSON.stringify(next))}
+  catch(error){setAlertMsg("Não foi possível remover alerta: "+error.message);return}
+  setAlerts(next);
+  if(editingAlertId===id)resetAlertEditor();
+  savePushRules(next).then(r=>setAlertMsg(r?.pending?
+   "Alerta removido localmente. Ativa push para sincronizar.":"Alerta removido e sincronizado.")
+  ).catch(e=>setAlertMsg("Alerta removido localmente, mas a sincronização falhou: "+e.message));
+ }
  async function enableNotifications(){
   try{const ok=await requestAlertPermission();if(ok&&Capacitor.isNativePlatform())await initPush(LOCAL_API,getSavedAlerts());setAlertMsg(ok?(Capacitor.isNativePlatform()?pushState():'Notificações autorizadas.'):'Permissão não concedida. Verifica as definições da aplicação.')}catch(e){console.error(e);setAlertMsg('Não foi possível ativar as notificações.')} 
  }
@@ -270,8 +319,8 @@ function App(){
  </div>{otaState&&<p role="status" className="otaStatus">{otaState}</p>}
  <div className="trainTypeFilters" role="group" aria-label="Filtrar tipos de comboio">{TRAIN_TYPES.map(type=><button key={type} type="button" className={enabledTypes.includes(type)?"typeActive":"typeInactive"} aria-pressed={enabledTypes.includes(type)} onClick={()=>setEnabledTypes(current=>current.includes(type)?current.filter(x=>x!==type):[...current,type])}>{type}</button>)}</div>
  <section className="stats"><div><b>{trains.length}</b><small>comboios recebidos</small></div><div><b>{trains.filter(t=>+(t.delayMinutes??t.delay??0)>0).length}</b><small>com atraso</small></div><div><b>{updated?updated.toLocaleTimeString("pt-PT"):"—"}</b><small>última atualização</small></div></section>
- {alertOpen&&<section className="alertsPanel"><div className="alertsHeading"><h2>🔔 Alertas ferroviários</h2><button onClick={()=>setAlertOpen(false)} aria-label="Fechar alertas">×</button></div>
- <p>Alertas de horários previstos, baseados na WebApp Comboios Live — Rui Costa. Com Firebase e o Worker configurados, os avisos push podem chegar mesmo com a aplicação fechada. Os horários são previstos, não confirmações de circulação.</p>
+ {alertOpen&&<section className="alertsPanel" ref={alertsPanelRef}><div className="alertsHeading"><h2>🔔 Alertas ferroviários</h2><button onClick={()=>setAlertOpen(false)} aria-label="Fechar alertas">×</button></div>
+ <p>{editingAlertId?"A editar um alerta existente. As alterações mantêm o mesmo número de identificação.":"Cria um alerta novo ou seleciona Editar num dos alertas guardados."}</p><p>Alertas de horários previstos, baseados na WebApp Comboios Live — Rui Costa. Com Firebase e o Worker configurados, os avisos push podem chegar mesmo com a aplicação fechada. Os horários são previstos, não confirmações de circulação.</p>
  <div className="alertsForm"><label>Monitorizar<select value={alertScope} onChange={e=>setAlertScope(e.target.value)}><option value="station">Estação</option><option value="train">Comboio</option><option value="combined">Comboio + estação</option></select></label>
  <label>{alertScope==='station'?'Nome exato da estação':'Número do comboio'}<input value={alertTarget} onChange={e=>setAlertTarget(e.target.value)} placeholder={alertScope==='station'?'Ex.: Leiria':'Ex.: 6450'} list={alertScope==='station'?'stationsList':undefined}/></label>
  {alertScope==='combined'&&<label>Estação de destino do alerta<input value={alertStation} onChange={e=>setAlertStation(e.target.value)} placeholder='Ex.: Monte Real' list='stationsList'/></label>}
@@ -284,9 +333,11 @@ function App(){
  {scheduleType==='weekly'&&<fieldset><legend>Dias da semana</legend>{['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map((d,i)=><label key={d} style={{display:'inline-flex',gap:4,marginRight:12,alignItems:'center'}}><input type="checkbox" checked={alertDays.includes(i)} onChange={e=>setAlertDays(v=>e.target.checked?[...v,i].sort():v.filter(x=>x!==i))}/>{d}</label>)}</fieldset>}
  <label><input type="checkbox" checked={notifyBefore} onChange={e=>setNotifyBefore(e.target.checked)}/> Pré-aviso antes da chegada prevista</label>
  <label><input type="checkbox" checked={notifyOnArrival} onChange={e=>setNotifyOnArrival(e.target.checked)}/> Avisar quando a passagem pela estação for detetada (não confirma paragem)</label>
- <button onClick={addAlert}>+ Guardar alerta</button><button onClick={enableNotifications} className="secondary">Autorizar notificações</button><button onClick={testNotification} className="secondary">🔔 Testar notificação local</button><button onClick={async()=>{setAlertMsg('A verificar o registo Firebase…');try{setAlertMsg(await initPush(LOCAL_API,getSavedAlerts()))}catch(e){setAlertMsg(`Push não configurado: ${e.message}`)}}} className="secondary">☁️ Ativar push em segundo plano</button><button onClick={async()=>{try{const r=await scheduleRemotePushTest();setAlertMsg(`Teste remoto agendado para daqui a ${r.delay_seconds} segundos. Fecha agora a APK e bloqueia o ecrã.`)}catch(e){setAlertMsg('Teste remoto: '+e.message)}}} className="secondary">📡 Testar push remoto (60 segundos)</button></div>
+ {editingAlertId&&<label><input type="checkbox" checked={alertEnabled} onChange={e=>setAlertEnabled(e.target.checked)}/> Alerta ativo</label>}
+ <div className="alertFormActions"><button onClick={addAlert}>{editingAlertId?"Guardar alterações":"+ Guardar alerta"}</button>
+ {editingAlertId&&<button type="button" onClick={()=>{resetAlertEditor();setAlertMsg("Edição cancelada. Nenhum alerta foi alterado.")}} className="secondary">Cancelar edição</button>}</div><button onClick={enableNotifications} className="secondary">Autorizar notificações</button><button onClick={testNotification} className="secondary">🔔 Testar notificação local</button><button onClick={async()=>{setAlertMsg('A verificar o registo Firebase…');try{setAlertMsg(await initPush(LOCAL_API,getSavedAlerts()))}catch(e){setAlertMsg(`Push não configurado: ${e.message}`)}}} className="secondary">☁️ Ativar push em segundo plano</button><button onClick={async()=>{try{const r=await scheduleRemotePushTest();setAlertMsg(`Teste remoto agendado para daqui a ${r.delay_seconds} segundos. Fecha agora a APK e bloqueia o ecrã.`)}catch(e){setAlertMsg('Teste remoto: '+e.message)}}} className="secondary">📡 Testar push remoto (60 segundos)</button></div>
  {alertMsg&&<p role="status">{alertMsg}</p>}
- <div className="alertRules">{alerts.length===0?<p>Sem alertas configurados.</p>:alerts.map(a=><div className="alertRule" key={a.id}><span><b>{a.scope==='station'?'Estação':a.scope==='combined'?'Comboio + estação':'Comboio'}: {a.target}{a.station?' → '+a.station:''}</b><small>{a.event==='both'?'Chegada e partida':a.event==='arrival'?'Chegada':'Partida'} · {a.notifyBefore!==false?`${a.lead} min antes`:''}{a.notifyOnArrival?' · passagem detetada':''} · {scheduleLabel(a)}</small></span><button onClick={()=>removeAlert(a.id)} aria-label={`Remover alerta ${a.target}`}>Remover</button></div>)}</div>
+ <div className="alertRules">{alerts.length===0?<p>Sem alertas configurados.</p>:alerts.map(a=><div className="alertRule" key={a.id}><span><b>{a.scope==='station'?'Estação':a.scope==='combined'?'Comboio + estação':'Comboio'}: {a.target}{a.station?' → '+a.station:''}</b>{a.enabled===false&&<small className="alertPaused">Pausado</small>}<small>{a.event==='both'?'Chegada e partida':a.event==='arrival'?'Chegada':'Partida'} · {a.notifyBefore!==false?`${a.lead} min antes`:''}{a.notifyOnArrival?' · passagem detetada':''} · {scheduleLabel(a)}</small></span><div className="alertRuleActions"><button type="button" onClick={()=>editAlert(a)} aria-label={`Editar alerta ${a.target}`}>Editar</button><button type="button" onClick={()=>removeAlert(a.id)} aria-label={`Remover alerta ${a.target}`}>Remover</button></div></div>)}</div>
  </section>}
  <div id="map"/>
  <aside><h3>Comboios</h3>{filtered.slice(0,100).map((t,i)=>{let d=+(t.delayMinutes??t.delay??0);return <article key={i} onClick={()=>setSel(t)}><b>🚆 {n(t.trainNumber??t.number??t.id)}</b><span className={d>0?"late":"ok"}>{d>0?`+${d} min`:"A horas"}</span><small>{n(t.origin?.designation??t.origin)} → {n(t.destination?.designation??t.destination)}</small></article>})}</aside>
