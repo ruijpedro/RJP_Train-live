@@ -60,4 +60,4 @@ jobs:
       - name: Verify Android identifier, push and OTA remain unchanged
         run: |
           node -e 'const c=require("./capacitor.config.json");if(c.appId!=="pt.rjp.trainlive")process.exit(1)'
-          node -e 'const m=require("./ota/manifest.json");if(m.appId!=="pt.rjp.trainlive"||!/^\\d+\\.\\d+\\.\\d+$/.test(m.version))process.exit(1)'
+          node -e 'const m=require("./ota/manifest.json");if(m.appId!=="pt.rjp.trainlive"||!/^[0-9]+[.][0-9]+[.][0-9]+$/.test(m.version))process.exit(1)'
