@@ -28,6 +28,7 @@ export function gpsSpeedKmh(metersPerSecond){
   return metersPerSecond===null||metersPerSecond===undefined||!Number.isFinite(n)||n<0?null:Math.round(n*3.6);
 }
 export function validOnboardPosition(coords){
-  const lat=Number(coords?.latitude),lon=Number(coords?.longitude);
+  if(coords?.latitude==null||coords?.longitude==null)return false;
+  const lat=Number(coords.latitude),lon=Number(coords.longitude);
   return Number.isFinite(lat)&&Number.isFinite(lon)&&lat>=-90&&lat<=90&&lon>=-180&&lon<=180;
 }
