@@ -18,7 +18,7 @@ test('A bordo: railway train ID is stable and separated from FT',()=>{
 test('A bordo: stations and schedule are presentation-only',()=>{
   assert.deepEqual(onboardStops(train).map(s=>s.station),['Leiria','Monte Real','Louriçal']);
   assert.equal(onboardStops(train)[1].eta,'14:25');
-  assert.equal(onboardStops({}),[]);
+  assert.deepEqual(onboardStops({}),[]);
 });
 test('A bordo: progress based only on last confirmed station, no fabricated GPS',()=>{
   assert.deepEqual(onboardProgress(train),{lastIndex:0,total:3,percent:33,next:'Monte Real'});
