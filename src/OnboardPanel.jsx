@@ -9,6 +9,8 @@ export default function OnboardPanel({train,onEnd,onPosition,onCenter,onRequestN
   const [notifyEnabled,setNotifyEnabled]=useState(false);
   const [warning,setWarning]=useState('');
   const notifiedRef=useRef('');
+  const followRef=useRef(false);
+  const [following,setFollowing]=useState(false);
   const [now,setNow]=useState(()=>new Date());
   const stations=useMemo(()=>onboardStops(train),[train]);
   const progress=onboardProgress(train);
@@ -31,6 +33,7 @@ export default function OnboardPanel({train,onEnd,onPosition,onCenter,onRequestN
           accuracy:coords.accuracy,speed:gpsSpeedKmh(coords.speed),timestamp:p.timestamp};
         setGps(next);
         onPosition(next);
+        if(followRef.current)onCenter(next);
       },
       e=>{if(alive)setGps({state:'error',message:e.code===1?'Permissão de localização recusada.':e.code===2?'Sem sinal GPS.':'GPS não respondeu.'})},
       {enableHighAccuracy:true,maximumAge:10000,timeout:20000}
@@ -83,8 +86,9 @@ export default function OnboardPanel({train,onEnd,onPosition,onCenter,onRequestN
       <div className="onboardGps"><b>📍 {positionLabel}</b>
         <span>Velocidade do telemóvel: {validPosition&&gps.speed!==null?gps.speed+' km/h':'indisponível'}</span>
         <small>Localização usada apenas neste dispositivo. Não enviada para o servidor.</small></div>
-      <button type="button" className="onboardCenter" disabled={!validPosition}
+      <div className="onboardMapActions"><button type="button" className="onboardCenter" disabled={!validPosition}
         onClick={()=>onCenter(validPosition)}>◎ Centrar no meu GPS</button>
+        <button type="button" className="onboardCenter" onClick={()=>{followRef.current=!followRef.current;setFollowing(followRef.current);if(followRef.current&&validPosition)onCenter(validPosition)}}>{following?'■ Parar seguimento':'▶ Seguir no mapa'}</button></div>
       <div className="onboardAlert"><label>Pré-aviso de saída
         <select value={lead} onChange={e=>setLead(Number(e.target.value))}>
           {[3,5,10,15].map(n=><option key={n} value={n}>{n} min antes</option>)}
