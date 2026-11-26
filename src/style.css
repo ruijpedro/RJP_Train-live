@@ -146,3 +146,35 @@ main>aside{grid-row:5}
  .alertRuleActions{width:100%;justify-content:flex-end}
  .alertRuleActions button{min-height:42px;padding:10px 14px}
 }
+
+
+/* RJP Train Live 2.12.41 · acompanhamento opt-in apenas no dispositivo. */
+.onboardStart{background:#16774f;margin:0 0 12px;min-height:44px;cursor:pointer}
+.onboardPanel{position:fixed;left:14px;bottom:42px;width:min(390px,calc(100vw - 28px));z-index:2100;background:#112b41;color:#edf6ff;border:1px solid #397394;border-radius:14px;box-shadow:0 15px 40px #000a;overflow:hidden;font-size:13px}
+.onboardPanel .onboardHeader{display:flex;justify-content:space-between;align-items:center;gap:7px;padding:7px;background:#153851;min-height:50px}
+.onboardPanel button{cursor:pointer;min-height:38px}
+.onboardPanel .onboardCollapse{background:transparent;color:#e9fbff;text-align:left;font-size:14px;flex:1;min-width:0;white-space:normal;padding:6px}
+.onboardPanel .onboardEnd{background:#783c43;color:#fff;white-space:nowrap}
+.onboardBody{display:flex;flex-direction:column;gap:9px;padding:13px;max-height:min(70dvh,580px);overflow-y:auto}
+.onboardBody small{display:block;color:#b8cfe0;line-height:1.4}
+.onboardNext{background:#0e2033;padding:11px;border-radius:10px;display:flex;flex-direction:column;gap:3px}
+.onboardNext strong{font-size:19px}
+.onboardProgress{height:9px;background:#314e61;border-radius:9px;overflow:hidden}
+.onboardProgress>span{display:block;height:100%;background:#39c990;border-radius:9px}
+.onboardLabel,.onboardAlert label{display:flex;flex-direction:column;gap:5px;font-weight:700}
+.onboardLabel select,.onboardAlert select{padding:10px;border-radius:8px;background:#092139;border:1px solid #52708a;color:white;width:100%;font-size:14px}
+.onboardEta,.onboardGps{display:flex;flex-direction:column;gap:6px;background:#0c2033;padding:11px;border-radius:9px}
+.onboardGps span{font-weight:600}
+.onboardMapActions{display:flex;flex-wrap:wrap;gap:7px}
+.onboardMapActions button{flex:1;min-width:130px}
+.onboardCenter{background:#1a5b8d}
+.onboardCenter:disabled{opacity:.5;cursor:not-allowed}
+.onboardAlert{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}
+.onboardAlert button{background:#186b51;min-height:42px}
+.onboardAlert button:disabled{opacity:.8}
+.onboardWarning{margin:0;padding:10px;background:#64491c;border:1px solid #b8903c;border-radius:8px;color:#ffe8a3}
+@media(max-width:750px){
+ .onboardPanel{left:8px;bottom:8px;width:calc(100vw - 16px);max-width:420px}
+ .onboardBody{max-height:62dvh}
+ .onboardPanel .onboardHeader{padding:5px}
+}
