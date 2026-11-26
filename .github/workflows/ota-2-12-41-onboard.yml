@@ -1,0 +1,160 @@
+name: RJP Train Live - OTA 2.12.41 Estou a bordo
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ota/onboard-rollout-request.json'
+permissions:
+  contents: write
+concurrency:
+  group: rjp-train-live-ota-production
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validar autorização, versão, identidade e estado de produção
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          p=pathlib.Path
+          approval=json.loads(p('ota/onboard-rollout-request.json').read_text())
+          assert approval=={
+            'version':'2.12.41','distribution':'all',
+            'default_mode':'original','pilot_opt_in':True,
+            'approved':'2026-11-26-onboard'}, 'Autorização OTA inesperada'
+          m=json.loads(p('ota/manifest.json').read_text())
+          assert m['appId']=='pt.rjp.trainlive' and m['version']=='2.12.40','Versão ativa não é a esperada'
+          assert json.loads(p('capacitor.config.json').read_text())['appId']=='pt.rjp.trainlive'
+          source=p('src/main.jsx').read_text()
+          assert 'VITE_RJP_V2_MIGRATION==="1"' in source
+          assert 'rjp_train_v2_pilot_opt_in' in source
+          assert 'Voltar à original (estável)' in source
+          assert 'fetchOriginalFeed' in source and 'initPush' in source
+          assert 'rjp_train_alerts_v26' in p('src/alerts.js').read_text()
+          source_alerts=p('src/main.jsx').read_text()
+          assert 'Guardar alterações' in source_alerts and 'Cancelar edição' in source_alerts
+          assert 'editAlert(a)' in source_alerts
+          assert 'Estou a bordo' in source_alerts
+          assert 'watchPosition' in p('src/OnboardPanel.jsx').read_text()
+          assert 'makeAlertRule' in p('src/alert-editor.js').read_text()
+          assert 'replaceAlert' in p('src/alert-editor.js').read_text()
+          assert 'rjp_push_device_v27' in p('src/push.js').read_text()
+          rc=subprocess.run(['gh','release','view','ota-v2.12.41'],
+            stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode
+          assert rc!=0,'Release OTA 2.12.41 já existe'
+          print('Identidade, versão, alertas e aprovação verificados')
+          PY
+      - name: Instalar e executar testes
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+      - name: Preparar recuperação 2.12.42 a partir do código da OTA anterior (não publicar)
+        env:
+          VITE_APP_VERSION: '2.12.42'
+          VITE_RJP_V2_MIGRATION: '1'
+          VITE_API_URL: ${{ vars.RJP_API_URL }}
+          VITE_OTA_MANIFEST_URL: https://raw.githubusercontent.com/ruijpedro/RJP_Train-live/main/ota/manifest.json
+        run: |
+          # True rollback candidate from the exact previous released source.
+          git fetch --tags --force
+          git worktree add --detach previous-ota ota-v2.12.40
+          cd previous-ota
+          npm install --no-audit --no-fund
+          npm run build
+          cd dist && zip -q -r ../../rjp-train-live-rollback-2.12.42.zip . && cd ../..
+          unzip -tq rjp-train-live-rollback-2.12.42.zip
+          sha256sum rjp-train-live-rollback-2.12.42.zip > rjp-train-live-rollback-2.12.42.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Recuperacao-fonte-original-v2.12.42-NAO-PUBLICADA
+          path: |
+            rjp-train-live-rollback-2.12.42.zip
+            rjp-train-live-rollback-2.12.42.sha256
+          if-no-files-found: error
+      - name: Criar pacote OTA 2.12.41 (original ativo; 2.0 opcional)
+        env:
+          VITE_APP_VERSION: '2.12.41'
+          VITE_RJP_V2_MIGRATION: '1'
+          VITE_API_URL: ${{ vars.RJP_API_URL }}
+          VITE_OTA_MANIFEST_URL: https://raw.githubusercontent.com/ruijpedro/RJP_Train-live/main/ota/manifest.json
+        run: |
+          npm run build
+          test -s dist/index.html
+          grep -Rq 'rjp_train_v2_pilot_opt_in' dist/assets
+          grep -Rq 'rjp_train_alerts_v26' dist/assets
+          grep -Rq 'Guardar alterações' dist/assets
+          grep -Rq 'Estou a bordo' dist/assets
+          grep -Rq 'rjp_push_device_v27' dist/assets
+          cd dist && zip -q -r ../rjp-train-live-ota-2.12.41.zip . && cd ..
+          unzip -tq rjp-train-live-ota-2.12.41.zip
+          sha256sum rjp-train-live-ota-2.12.41.zip > rjp-train-live-ota-2.12.41.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RJP-Train-Live-2.12.41-OTA-PACKAGE
+          path: |
+            rjp-train-live-ota-2.12.41.zip
+            rjp-train-live-ota-2.12.41.sha256
+          if-no-files-found: error
+      - name: Publicar release OTA 2.12.41 sem mudar manifesto
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ota-v2.12.41 \
+            rjp-train-live-ota-2.12.41.zip rjp-train-live-ota-2.12.41.sha256 \
+            --title "RJP Train Live 2.12.41 - Estou a bordo" \
+            --notes "OTA para todos, fonte original por defeito; criação, edição, pausa e remoção de alertas sem perder regras nem Firebase. Motor CP/TML 2.0 preservado. Estimativas não são GPS."
+      - name: Verificar URL pública e checksum, depois mudar manifesto
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, os, pathlib, time, urllib.request
+          version='2.12.41'
+          url=f'https://github.com/ruijpedro/RJP_Train-live/releases/download/ota-v{version}/rjp-train-live-ota-{version}.zip'
+          sha=hashlib.sha256(pathlib.Path(f'rjp-train-live-ota-{version}.zip').read_bytes()).hexdigest()
+          ok=False
+          for i in range(10):
+            try:
+              req=urllib.request.Request(url, headers={'User-Agent':'Mozilla/5.0 (compatible; RJP-OTA/1.0)', 'Cache-Control':'no-cache'})
+              with urllib.request.urlopen(req,timeout=60) as resp:
+                ok=resp.status==200 and hashlib.sha256(resp.read()).hexdigest()==sha
+              if ok: break
+            except Exception as exc: print('Verificação pública ainda indisponível:', str(exc)[:180])
+            if i<9:time.sleep(5)
+          assert ok,'Download público não verificável; manter OTA 2.12.40'
+          api='https://api.github.com/repos/ruijpedro/RJP_Train-live/contents/ota/manifest.json'
+          headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+                   'Accept':'application/vnd.github+json',
+                   'X-GitHub-Api-Version':'2022-11-28',
+                   'User-Agent':'RJP-OTA-Publisher'}
+          def call(method,body=None):
+            data=None if body is None else json.dumps(body).encode()
+            req=urllib.request.Request(api,data=data,headers=headers,method=method)
+            with urllib.request.urlopen(req,timeout=45) as resp:return json.load(resp)
+          old=call('GET')
+          current=json.loads(base64.b64decode(old['content']))
+          assert current['appId']=='pt.rjp.trainlive' and current['version']=='2.12.40','Manifesto mudou entretanto'
+          m={'appId':'pt.rjp.trainlive','version':version,'url':url,
+            'notes':'OTA 2.12.41 - Estou a bordo, GPS local opcional, alertas e motor 2.0 preservados',
+            'checksum':sha}
+          data=base64.b64encode((json.dumps(m,ensure_ascii=False,indent=2)+'\n').encode()).decode()
+          res=call('PUT',{'message':'ota: publish 2.12.41 with optional independent CP/TML',
+            'content':data,'sha':old['sha'],'branch':'main'})
+          assert res.get('commit',{}).get('sha'),'Não foi criado commit do manifesto'
+          print('Publicação confirmada, SHA-256:',sha)
+          PY
+      - name: Confirmar manifesto ativo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/ruijpedro/RJP_Train-live/contents/ota/manifest.json \
+            --jq .content | base64 -d | python3 -c "import json,sys; m=json.load(sys.stdin); assert m['version']=='2.12.41'; assert m['appId']=='pt.rjp.trainlive'; print('OTA pública confirmada: 2.12.41')"
