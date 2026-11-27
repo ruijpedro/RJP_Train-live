@@ -1,7 +1,7 @@
 {
   "appId": "pt.rjp.trainlive",
-  "version": "2.12.41",
-  "url": "https://github.com/ruijpedro/RJP_Train-live/releases/download/ota-v2.12.41/rjp-train-live-ota-2.12.41.zip",
-  "notes": "OTA 2.12.41 - Estou a bordo, GPS local opcional, alertas e motor 2.0 preservados",
-  "checksum": "a2c6502d245f9972d7dd38ec672ac0457e4460639e2ca0935133ef25282d8e61"
+  "version": "2.12.42",
+  "url": "https://github.com/ruijpedro/RJP_Train-live/releases/download/ota-v2.12.42/rjp-train-live-ota-2.12.42.zip",
+  "notes": "OTA 2.12.42 — identificação CP por cores U, R, IR, IC, AP, SUD e FT",
+  "checksum": "0683c4884dc9aede448d6ee38bcb173fef8ad5aa74e8a28215bb90282898a421"
 }
