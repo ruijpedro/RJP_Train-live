@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {routeConsensus} from '../worker/collaborative-route.js';
+const now=1700000000000;
+const a={operator:'CP',train:'6450',session:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',latitude:39.005,longitude:-9,accuracy:10,timestamp:now};
+const b={...a,session:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'};
+const routes=new Map([['CP|6450',{type:'LineString',coordinates:[[-9,39],[-9,39.01]]}]]);
+test('matching service corridor',()=>{const r=routeConsensus([a,b],routes,now);assert.equal(r.length,1);assert.equal(r[0].verified,false);assert.equal(r[0].corridorMatched,true)});
+test('missing service route',()=>assert.deepEqual(routeConsensus([a,b],new Map(),now),[]));
+test('wrong corridor',()=>assert.deepEqual(routeConsensus([a,{...b,longitude:-8.99}],routes,now),[]));
+test('duplicate session',()=>assert.deepEqual(routeConsensus([a,a],routes,now),[]));
+test('expired positions',()=>assert.deepEqual(routeConsensus([a,b],routes,now+46000),[]));
