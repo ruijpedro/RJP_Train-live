@@ -14,3 +14,23 @@ jobs:
         with:
           node-version: '22'
       - run: node --test tests/collaborative.test.mjs tests/corridor.test.mjs tests/collaborative-route.test.mjs
+      - name: Validate official IP cartography
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for name, types in [('railways-ip', {'LineString','MultiLineString'}), ('stations-ip', {'Point'})]:
+              data=json.loads(Path(f'public/data/{name}.geojson').read_text())
+              assert data['type']=='FeatureCollection' and data['features']
+              for f in data['features']:
+                  assert f['geometry']['type'] in types
+                  assert f['geometry']['coordinates']
+              print(name, len(data['features']))
+          PY
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: test -s dist/data/railways-ip.geojson && test -s dist/data/stations-ip.geojson
+      - uses: actions/upload-artifact@v4
+        with:
+          name: train-live-ip-preview
+          path: dist/
