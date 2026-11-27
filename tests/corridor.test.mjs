@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { corridorDistance, withinCorridor } from '../worker/corridor.js';
+const line={type:'LineString',coordinates:[[-9,39],[-9,39.01]]};
+const sample={latitude:39.005,longitude:-9,accuracy:10};
+test('on corridor',()=>assert.ok(corridorDistance(sample,line)<1));
+test('reject distant sample',()=>assert.equal(withinCorridor({...sample,longitude:-8.99},line),false));
+test('reject missing geometry',()=>assert.equal(withinCorridor(sample,null),false));
+test('reject inaccurate GPS',()=>assert.equal(withinCorridor({...sample,accuracy:51},line),false));
+test('multi corridor',()=>assert.equal(withinCorridor(sample,{type:'MultiLineString',coordinates:[line.coordinates]}),true));
+test('reject beyond endpoint',()=>assert.equal(withinCorridor({...sample,latitude:39.02},line),false));

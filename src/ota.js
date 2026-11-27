@@ -4,7 +4,7 @@ import {CapacitorUpdater} from '@capgo/capacitor-updater';
 // Manual pilot. Existing push, Firebase, D1 and alert storage are untouched.
 const URL=(import.meta.env.VITE_OTA_MANIFEST_URL||'https://raw.githubusercontent.com/ruijpedro/RJP_Train-live/main/ota/manifest.json').trim();
 const APP='pt.rjp.trainlive';
-const VERSION=(import.meta.env.VITE_APP_VERSION||'2.12.41').trim();
+const VERSION=(import.meta.env.VITE_APP_VERSION||'2.12.42').trim();
 export const APP_VERSION=VERSION;
 function parts(s){return /^\d+\.\d+\.\d+$/.test(s||'')?s.split('.').map(Number):null}
 function isNewer(candidate,current){
