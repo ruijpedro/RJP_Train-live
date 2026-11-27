@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {validateSample,consensus} from '../worker/collaborative.js';
+const now=1800000000000;
+const a={operator:'CP',train:'6450',session:'00000000-0000-4000-8000-000000000001',latitude:39.75,longitude:-8.82,accuracy:10,timestamp:now};
+const b={...a,session:'00000000-0000-4000-8000-000000000002',latitude:39.7501};
+test('accept fresh accurate sample',()=>assert.equal(validateSample(a,now),true));
+test('reject stale, inaccurate, future and invalid coordinates',()=>{for(const patch of [{timestamp:now-46000},{accuracy:51},{timestamp:now+6000},{latitude:NaN},{longitude:0}])assert.equal(validateSample({...a,...patch},now),false)});
+test('single or repeated session cannot establish agreement',()=>assert.deepEqual(consensus([a,a],now),[]));
+test('agreeing sessions produce explicitly unverified estimate',()=>{const r=consensus([a,b],now);assert.equal(r.length,1);assert.equal(r[0].contributors,2);assert.equal(r[0].verified,false)});
+test('reject disagreement and separate operators',()=>{assert.deepEqual(consensus([a,{...b,latitude:40}],now),[]);assert.deepEqual(consensus([a,{...b,operator:'FT'}],now),[])});
