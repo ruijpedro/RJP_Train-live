@@ -1,0 +1,16 @@
+name: Collaborative GPS validation
+on:
+  push:
+    branches: [feature/collaborative-gps-v2.12.42]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/collaborative.test.mjs tests/corridor.test.mjs tests/collaborative-route.test.mjs
