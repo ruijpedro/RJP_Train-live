@@ -130,11 +130,19 @@ function App(){
    attribution:"Railway overlay © OpenRailwayMap contributors",opacity:.95,maxZoom:19
  }).addTo(m);
  layers.current.rail=L.geoJSON(null,{style:{color:"#ff8a00",weight:5,opacity:.95}}).addTo(m);
- layers.current.st=L.geoJSON(null,{pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:4,weight:1,fillOpacity:.9}),onEachFeature:(f,l)=>l.bindTooltip(f.properties?.name||f.properties?.designacao||"Estação")}).addTo(m);
+ layers.current.st=L.geoJSON(null,{pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:4,weight:1,fillOpacity:.9}),onEachFeature:(f,l)=>l.bindTooltip(f.properties?.Designacao||f.properties?.name||f.properties?.designacao||"Estação")}).addTo(m);
  layers.current.tr=L.layerGroup().addTo(m);
  layers.current.ft=L.layerGroup().addTo(m);
- Promise.all([fetch(`${BASE}data/railways.geojson`).then(r=>r.ok?r.json():null),fetch(`${BASE}data/stations.geojson`).then(r=>r.ok?r.json():null)]).then(([r,s])=>{if(r)layers.current.rail.addData(r);if(s)layers.current.st.addData(s)});
- return()=>m.remove()},[]);
+ let active=true;
+ const loadGeo=async(primary,fallback,types)=>{
+   for(const file of [primary,fallback]){
+     try{const response=await fetch(`${BASE}data/${file}`);if(!response.ok)continue;const data=await response.json();
+       if(data?.type==="FeatureCollection"&&Array.isArray(data.features)&&data.features.length&&data.features.every(f=>types.includes(f.geometry?.type)))return {data,official:file===primary};
+     }catch(e){console.warn("Cartografia:",file,e);}
+   }return null;
+ };
+ Promise.all([loadGeo("railways-ip.geojson","railways.geojson",["LineString","MultiLineString"]),loadGeo("stations-ip.geojson","stations.geojson",["Point"])]).then(([r,s])=>{if(!active)return;if(r)layers.current.rail.addData(r.data);if(s)layers.current.st.addData(s.data);if(r?.official||s?.official)m.attributionControl.addAttribution("Cartografia: Infraestruturas de Portugal");});
+ return()=>{active=false;m.remove()}},[]);
  async function loadFertagus(){
   // Separate optional layer: CP loading and alert dispatch must not depend on TML.
   const layer=layers.current.ft;
